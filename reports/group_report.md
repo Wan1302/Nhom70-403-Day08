@@ -1,127 +1,97 @@
-# Báo Cáo Nhóm — Lab Day 08: RAG Pipeline
+# Báo Cáo Nhóm - Lab Day 08: RAG Pipeline
 
 **Nhóm:** 70  
-**Môn:** 403  
-**Ngày nộp:** 2026-04-13
+**Phòng:** 403  
+**Ngày nộp:** 2026-04-13  
+**Log grading chính:** `logs/grading_run_variant_b.json`  
+**Scorecard chính:** `results/scorecard_variant_b.md`
+<br>
+**Thành viên:** 
+- Hồ Trọng Duy Quang - 2A202600081
+- Hồ Trần Đình Nguyên - 2A202600080
+- Hồ Đắc Toàn - 2A202600057
 
----
 
-## 1. Tổng quan hệ thống
+## 1. Pipeline nhóm đã xây dựng
 
-Hệ thống được xây dựng là trợ lý nội bộ dạng RAG (Retrieval-Augmented Generation) phục vụ khối CS và IT Helpdesk. Hệ thống trả lời câu hỏi về SLA, chính sách hoàn tiền, access control và HR policy dựa trên tài liệu nội bộ, có citation rõ nguồn và có thể audit.
+Nhóm xây dựng một pipeline RAG end-to-end cho trợ lý nội bộ CS + IT Helpdesk, trả lời câu hỏi về SLA P1, refund policy, access control, IT Helpdesk FAQ và HR Leave Policy. Luồng tổng thể là:
 
-### Kiến trúc pipeline
-
-```
-[Tài liệu nội bộ]
-    → index.py: Preprocess → Chunk → Embed → Lưu ChromaDB
-    → rag_answer.py: Query → Retrieve (Hybrid/Dense/Sparse) → [Rerank] → Generate
-    → Câu trả lời có citation
-```
-
-### Tài liệu được index
-
-| File | Nguồn | Department | Số chunk |
-|------|-------|------------|----------|
-| `policy_refund_v4.txt` | `policy/refund-v4.pdf` | CS | 6 |
-| `sla_p1_2026.txt` | `support/sla-p1-2026.pdf` | IT | 5 |
-| `access_control_sop.txt` | `it/access-control-sop.md` | IT Security | 8 |
-| `it_helpdesk_faq.txt` | `support/helpdesk-faq.md` | IT | 6 |
-| `hr_leave_policy.txt` | `hr/leave-policy-2026.pdf` | HR | 5 |
-
-**Tổng:** 30 chunks — Chunk size ~400 tokens, overlap ~80 tokens.
-
-### Thông số kỹ thuật
-
-| Thành phần | Lựa chọn |
-|------------|----------|
-| Embedding model | `text-embedding-3-small` (OpenAI) |
-| Vector store | ChromaDB `PersistentClient` |
-| Similarity | Cosine |
-| LLM sinh câu trả lời | `gpt-4o-mini`, temperature=0, max_tokens=512 |
-| Đánh giá (judge) | `gpt-4o` — LLM-as-Judge trên 4 metrics |
-
----
-
-## 2. Thiết kế thực nghiệm A/B
-
-Nhóm chạy 2 vòng thực nghiệm theo chuỗi, mỗi vòng **chỉ thay đổi một biến**, đánh giá trên 10 câu hỏi thuộc 5 danh mục: SLA, Refund, Access Control, IT Helpdesk, Insufficient Context.
-
-```
-Baseline (dense) → Variant A (hybrid) → Variant B (hybrid + rerank)
-     Compare 1: Δ dense→hybrid            Compare 2: Δ no rerank→rerank
+```text
+[Raw Docs]
+  -> [index.py: Preprocess -> Chunk -> Embed -> Store]
+  -> [ChromaDB Vector Store]
+  -> [rag_answer.py: Query -> Retrieve -> (Rerank) -> Generate]
+  -> [Grounded Answer + Citation]
 ```
 
-**Metrics đánh giá (thang 1–5):**
-- **Faithfulness** — câu trả lời có bám sát context không
-- **Relevance** — câu trả lời có đúng trọng tâm câu hỏi không
-- **Context Recall** — có retrieve đúng source cần thiết không
-- **Completeness** — có bao phủ đủ các điểm chính trong expected answer không
+Ở Sprint 1, `index.py` đọc 5 file trong `data/docs/`, extract metadata từ header (`source`, `section`, `department`, `effective_date`, `access`), chunk theo heading `=== ... ===`, sau đó fallback theo paragraph nếu section dài. Nhóm dùng `CHUNK_SIZE=400` tokens và `CHUNK_OVERLAP=80` tokens để giữ đủ ngữ cảnh ở biên chunk. Tổng số chunk được ghi trong `docs/architecture.md` là 30 chunks.
 
----
+Embedding dùng OpenAI `text-embedding-3-small`, lưu vào ChromaDB `PersistentClient` tại `chroma_db_runtime/`, similarity metric là cosine. Ở Sprint 2, baseline dùng dense retrieval với `top_k_search=10`, `top_k_select=3`, không rerank. Ở Sprint 3, nhóm thử hybrid retrieval bằng dense + BM25 qua Reciprocal Rank Fusion, rồi thêm CrossEncoder rerank `cross-encoder/ms-marco-MiniLM-L-6-v2`. Generation dùng `gpt-4o-mini`, temperature 0, max tokens 512, prompt bắt buộc trả lời từ retrieved context và citation dạng `[1]`.
 
-## 3. Kết quả A/B
+## 2. Quyết định kỹ thuật quan trọng nhất
 
-### Compare 1 — Baseline (dense) vs Variant A (hybrid, không rerank)
+Quyết định quan trọng nhất là chọn cấu hình **Hybrid + CrossEncoder rerank** làm best variant thay vì chỉ dùng dense hoặc hybrid đơn thuần.
 
-**Biến thay đổi:** `retrieval_mode: dense → hybrid (dense + BM25)`
+Bối cảnh vấn đề: corpus có cả câu tự nhiên tiếng Việt và nhiều keyword/tên riêng như `P1`, `VPN`, `Admin Access`, `store credit`, nên dense retrieval có lợi về semantic matching, còn BM25 có lợi với exact keyword. Tuy nhiên tuning log cho thấy hybrid không rerank kéo thêm noise vào candidate pool.
 
-| Metric | Baseline | Variant A | Δ |
-|--------|---------|-----------|---|
-| Faithfulness | 4.50/5 | 4.70/5 | +0.20 |
-| Relevance | **4.50/5** | **4.10/5** | **−0.40** |
-| Context Recall | 5.00/5 | 5.00/5 | 0.00 |
-| Completeness | **3.90/5** | **3.60/5** | **−0.30** |
+| Phương án | Ưu điểm | Nhược điểm |
+|-----------|---------|------------|
+| Dense baseline | Ổn định, ít keyword noise | Có thể hụt exact term/cross-document context |
+| Hybrid dense + BM25 | Bắt keyword tốt hơn, mở rộng candidate pool | BM25 có thể đưa sai section/source lên cao |
+| Hybrid + rerank | Lọc lại candidate bằng CrossEncoder trước khi prompt | Tốn thêm thời gian/model local |
 
-**Câu nổi bật:**
-- `q06` (SLA escalation P1): Relevance 5→3, Completeness 4→1 — BM25 retrieve nhầm chunk access control ("IT Admin") thay vì chunk SLA escalation.
-- `q09` (Insufficient context): Relevance 4→1 — hybrid lấy thêm chunk nhiễu khiến model suy diễn thay vì abstain.
+Bằng chứng rõ nhất nằm ở kết quả A/B. Baseline dense đạt Faithfulness 4.60, Relevance 4.50, Context Recall 5.00, Completeness 3.30. Variant A chỉ đổi một biến `retrieval_mode: dense -> hybrid`, Faithfulness tăng lên 4.80 nhưng Relevance giảm xuống 4.20 và Completeness giảm xuống 3.00. Điều này cho thấy hybrid một mình chưa đủ.
 
-**Kết luận Compare 1:** Hybrid không rerank làm **giảm** Relevance và Completeness. BM25 mở rộng candidate pool nhưng cũng đưa vào noise.
+Sau đó Variant B chỉ đổi một biến so với Variant A: `use_rerank: False -> True`. Kết quả tăng lên Faithfulness 4.90, Relevance 4.50, Context Recall giữ 5.00, Completeness 3.20. Vì vậy nhóm chốt Variant B: `retrieval_mode="hybrid"`, `top_k_search=10`, `top_k_select=3`, `use_rerank=True`.
 
----
+## 3. Kết quả grading questions
 
-### Compare 2 — Variant A (hybrid) vs Variant B (hybrid + rerank)
+Nhóm chạy 10 câu grading bằng Variant B lúc 17:50 ngày 2026-04-13, log tại `logs/grading_run_variant_b.json`. Theo phân loại trong `docs/tuning-log.md`, kết quả gồm 9 câu Partial và 1 câu Zero (`gq05`), không có câu bị hallucination penalty rõ ràng ở best variant. Nếu quy đổi theo rubric Partial = 50% điểm câu, ước tính raw score là **44/98**, tương đương khoảng **13.47/30** cho phần grading questions.
 
-**Biến thay đổi:** `use_rerank: False → True`  
-**Reranker:** `CrossEncoder: cross-encoder/ms-marco-MiniLM-L-6-v2`
+Câu xử lý tốt nhất là `gq06`: pipeline lấy đúng cả `it/access-control-sop.md` và `support/sla-p1-2026.pdf`, trả lời đúng emergency temporary access tối đa 24 giờ, cần Tech Lead phê duyệt bằng lời, ticket chính thức sau 24 giờ và log Security Audit. Câu này còn thiếu hotline ext. 9999 nên chỉ xem là Partial.
 
-| Metric | Variant A | Variant B | Δ |
-|--------|-----------|-----------|---|
-| Faithfulness | 4.70/5 | 4.70/5 | 0.00 |
-| Relevance | **4.10/5** | **4.80/5** | **+0.70** |
-| Context Recall | 5.00/5 | 5.00/5 | 0.00 |
-| Completeness | **3.60/5** | **4.00/5** | **+0.40** |
+Câu fail rõ nhất là `gq05`. Pipeline retrieve đúng document `it/access-control-sop.md`, nhưng lấy nhầm Section 4 về emergency temporary access 24 giờ thay vì Section 2 về Level 4 Admin Access cần IT Manager + CISO, 5 ngày làm việc và security training. Đây là lỗi retrieval/ranking nhầm section trong cùng document, không phải lỗi thiếu source.
 
-**Câu nổi bật:**
-- `q06` (SLA escalation P1): Relevance 3→5, Completeness 1→5 — rerank đẩy đúng chunk SLA lên top, loại bỏ noise từ access control.
-- `q09` (Insufficient context): Relevance 1→5 — rerank giúp model nhận ra context không đủ và abstain đúng.
-- Faithfulness giữ nguyên 4.70 — rerank không làm giảm độ bám context.
+`gq07` là câu insufficient context. Model trả lời "Tôi không biết.", không bịa mức phạt nên an toàn về Faithfulness, nhưng bị Partial vì không nói rõ rằng tài liệu hiện có không quy định penalty cho SLA P1.
 
-**Kết luận Compare 2:** Rerank cải thiện Relevance **+0.70** và Completeness **+0.40** — mức cải thiện rõ nhất trong toàn bộ experiment.
+## 4. A/B Comparison
 
----
+Nhóm tuân thủ quy tắc A/B: mỗi lần chỉ đổi một biến.
 
-## 4. So sánh tổng hợp 3 cấu hình
+**Compare 1 - Dense baseline vs Hybrid không rerank**
 
-| Cấu hình | Faithfulness | Relevance | Context Recall | Completeness |
-|----------|-------------|-----------|----------------|-------------|
-| Baseline (dense) | 4.50 | 4.50 | 5.00 | 3.90 |
-| Variant A (hybrid) | 4.70 | 4.10 | 5.00 | 3.60 |
-| **Variant B (hybrid + rerank)** | **4.70** | **4.80** | **5.00** | **4.00** |
+| Metric | Baseline | Variant A | Delta |
+|--------|----------|-----------|-------|
+| Faithfulness | 4.60 | 4.80 | +0.20 |
+| Relevance | 4.50 | 4.20 | -0.30 |
+| Context Recall | 5.00 | 5.00 | 0.00 |
+| Completeness | 3.30 | 3.00 | -0.30 |
 
----
+Kết luận: Hybrid không rerank kém hơn baseline ở Relevance và Completeness. BM25 giúp mở rộng candidates nhưng đưa thêm noise, ví dụ `gq02` Relevance giảm từ 5 xuống 3.
 
-## 5. Kết luận — Chọn Variant B
+**Compare 2 - Hybrid không rerank vs Hybrid + rerank**
 
-**Cấu hình được chốt: `hybrid + CrossEncoder rerank`**
+| Metric | Variant A | Variant B | Delta |
+|--------|-----------|-----------|-------|
+| Faithfulness | 4.80 | 4.90 | +0.10 |
+| Relevance | 4.20 | 4.50 | +0.30 |
+| Context Recall | 5.00 | 5.00 | 0.00 |
+| Completeness | 3.00 | 3.20 | +0.20 |
 
-**Lý do:**
-1. **Hybrid một mình không đủ** — BM25 mở rộng candidate pool nhưng đưa vào noise. Nếu không lọc lại, Relevance và Completeness giảm so với baseline (thấy rõ ở Variant A).
-2. **Rerank là bước then chốt** — CrossEncoder re-score lại toàn bộ candidates từ hybrid, đẩy chunk đúng nhất lên đầu trước khi build prompt. Case `q06` là bằng chứng trực tiếp: Variant A lấy sai chunk, Variant B sửa đúng nhờ rerank.
-3. **Context Recall không bị ảnh hưởng** — giữ nguyên 5.00/5 ở cả 3 cấu hình, chứng tỏ retrieval bao phủ đúng source; vấn đề nằm ở ranking, không phải coverage.
+Kết luận: rerank là thay đổi có ích nhất sau khi bật hybrid. CrossEncoder không làm mất expected sources (Context Recall giữ 5.00), nhưng sắp xếp lại candidate tốt hơn trước khi build prompt. Variant B là cấu hình tốt nhất trong ba bản đã thử, dù Completeness vẫn thấp hơn baseline một chút do `gq05` bị C=1 kéo xuống.
 
-**Vấn đề còn tồn tại cần xử lý tiếp:**
-- `q04`: Faithfulness=2 (cả 3 cấu hình) — LLM tự thêm exception "lỗi nhà sản xuất" không có trong context; cần thêm rule abstain trong prompt.
-- `q09`: Completeness=2 (cả 3 cấu hình) — câu hỏi về ERR-403-AUTH không có trong tài liệu; cần tune prompt abstain rõ hơn.
-- `q10`: Completeness=3 — thiếu thông tin "3–5 ngày làm việc"; cần bổ sung chunk hoặc tune citation rule.
+## 5. Phân công và đánh giá nhóm
+
+| Thành viên | Phần đã làm | Sprint |
+|------------|-------------|--------|
+| Hồ Trọng Duy Quang | Indexing: preprocess docs, chunking, metadata, embedding/index analysis | Sprint 1 |
+| Hồ Trần Đình Nguyên | RAG answering: dense/sparse/hybrid retrieval, RRF, rerank, grounded prompt | Sprint 2-3 |
+| Hồ Đắc Toàn | Evaluation: LLM-as-Judge, scorecard, A/B comparison, tuning documentation | Sprint 4 |
+
+Điều nhóm làm tốt là chạy được đủ pipeline end-to-end và có logging/scorecard cho 3 cấu hình thay vì chỉ nộp một bản. `eval.py` có LLM-as-Judge cho Faithfulness, Relevance, Context Recall và Completeness, có fallback heuristic nếu judge lỗi. `docs/architecture.md` và `docs/tuning-log.md` ghi rõ chunking decision, retrieval config và lý do chọn Variant B.
+
+Điều nhóm làm chưa tốt là chưa xử lý triệt để các lỗi sau tuning. `gq05` vẫn nhầm section trong cùng `access_control_sop.md`, còn prompt abstain quá ngắn làm `gq07` chỉ trả lời "Tôi không biết." thay vì giải thích thiếu context. Một số câu multi-detail như `gq02` và `gq09` cũng thiếu chi tiết nhỏ dù retrieve đúng source.
+
+## 6. Nếu có thêm 1 ngày, nhóm sẽ làm gì?
+
+Nhóm sẽ ưu tiên hai cải tiến có bằng chứng từ scorecard. Thứ nhất, prepend section heading vào chunk text khi index, ví dụ "Section 2 - Level 4 Admin Access" hoặc "Section 4 - Emergency Temporary Access", để fix `gq05` nhầm section. Thứ hai, chỉnh `build_grounded_prompt()` để khi thiếu context, model phải nói rõ thông tin nào không có trong tài liệu; thay đổi này nhắm trực tiếp vào `gq07`.
