@@ -17,8 +17,10 @@ A/B Rule (từ slide):
   Đổi đồng thời chunking + hybrid + rerank + prompt = không biết biến nào có tác dụng.
 """
 
+import os
 import json
 import csv
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -29,7 +31,10 @@ from rag_answer import rag_answer
 # =============================================================================
 
 TEST_QUESTIONS_PATH = Path(__file__).parent / "data" / "test_questions.json"
+GRADING_QUESTIONS_PATH = Path(__file__).parent / "data" / "test_questions.json"
 RESULTS_DIR = Path(__file__).parent / "results"
+LOGS_DIR = Path(__file__).parent / "logs"
+GRADING_LOG_PATH = LOGS_DIR / "grading_run.json"
 
 # Cấu hình baseline (Sprint 2)
 BASELINE_CONFIG = {
@@ -41,13 +46,12 @@ BASELINE_CONFIG = {
 }
 
 # Cấu hình variant (Sprint 3 — điều chỉnh theo lựa chọn của nhóm)
-# TODO Sprint 4: Cập nhật VARIANT_CONFIG theo variant nhóm đã implement
 VARIANT_CONFIG = {
-    "retrieval_mode": "hybrid",   # Hoặc "dense" nếu chỉ đổi rerank
+    "retrieval_mode": "hybrid",
     "top_k_search": 10,
     "top_k_select": 3,
-    "use_rerank": True,           # Hoặc False nếu variant là hybrid không rerank
-    "label": "variant_hybrid_rerank",
+    "use_rerank": True,
+    "label": "variant_hybrid",
 }
 
 
@@ -88,12 +92,154 @@ def score_faithfulness(
 
     Trả về dict với: score (1-5) và notes (lý do)
     """
-    # TODO Sprint 4: Implement scoring
-    # Tạm thời trả về None (yêu cầu chấm thủ công)
-    return {
-        "score": None,
-        "notes": "TODO: Chấm thủ công hoặc implement LLM-as-Judge",
-    }
+    answer_text = (answer or "").strip()
+    answer_lower = answer_text.lower()
+    abstain_markers = [
+        "i do not know",
+        "i don't know",
+        "không biết",
+        "khong biet",
+        "không đủ dữ liệu",
+        "khong du du lieu",
+        "insufficient context",
+    ]
+    is_abstain = any(marker in answer_lower for marker in abstain_markers)
+
+    if answer_text in ("", "PIPELINE_NOT_IMPLEMENTED") or answer_text.startswith("ERROR:"):
+        return {
+            "score": 1,
+            "notes": "Pipeline error/empty answer -> cannot verify grounded evidence.",
+        }
+
+    if not chunks_used:
+        if is_abstain:
+            return {
+                "score": 5,
+                "notes": "No retrieved context and model abstained -> no hallucination.",
+            }
+        return {
+            "score": 1,
+            "notes": "No retrieved context but answer still asserted facts -> likely ungrounded.",
+        }
+
+    # Build compact context for judge prompt.
+    context_parts = []
+    for i, chunk in enumerate(chunks_used[:8], 1):
+        meta = chunk.get("metadata", {}) or {}
+        source = meta.get("source", "unknown")
+        section = meta.get("section", "")
+        text = (chunk.get("text", "") or "").strip()
+        if len(text) > 700:
+            text = text[:700] + "..."
+        header = f"[{i}] {source}"
+        if section:
+            header += f" | {section}"
+        context_parts.append(f"{header}\n{text}")
+    context_block = "\n\n".join(context_parts)
+
+    # Chọn LLM-as-Judge để tự động chấm và tối ưu điểm bonus Sprint 4.
+    try:
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("Missing OPENAI_API_KEY for LLM-as-Judge.")
+
+        judge_model = os.getenv("EVAL_JUDGE_MODEL", "gpt-4o")
+        client = OpenAI(api_key=api_key)
+
+        judge_prompt = f"""<role>
+You are a strict evaluator for RAG faithfulness.
+</role>
+
+<task>
+Rate only faithfulness: whether the answer is supported by retrieved context.
+Do not score relevance, style, or completeness unless it affects grounding.
+</task>
+
+<rubric>
+5 = fully grounded in context
+4 = almost fully grounded, one minor uncertain detail
+3 = mostly grounded, some possible model-added info
+2 = many claims not supported by context
+1 = mostly hallucinated / not grounded
+</rubric>
+
+<context>
+{context_block}
+</context>
+
+<answer>
+{answer_text}
+</answer>
+
+<constraints>
+- Use only information in <context>.
+- If answer adds unsupported facts, lower score.
+- Keep reason short (max 25 words).
+</constraints>
+
+<output_format>
+Return strict JSON only (no markdown, no code block):
+{{"score": <integer 1-5>, "reason": "<short reason>"}}
+</output_format>
+"""
+
+        response = client.chat.completions.create(
+            model=judge_model,
+            messages=[{"role": "user", "content": judge_prompt}],
+            temperature=0,
+            max_tokens=220,
+        )
+        content = (response.choices[0].message.content or "").strip()
+        # Parse robustly in case model wraps JSON in extra text/code fences.
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            match = re.search(r"\{[\s\S]*\}", content)
+            if not match:
+                raise
+            parsed = json.loads(match.group(0))
+
+        score = int(parsed.get("score"))
+        score = max(1, min(5, score))
+        reason = (parsed.get("reason") or "LLM judge").strip()
+        return {
+            "score": score,
+            "notes": f"LLM-as-Judge ({judge_model}): {reason}",
+        }
+    except Exception as e:
+        # Fallback heuristic để tránh crash pipeline nếu judge call lỗi.
+        context_text = " ".join((c.get("text", "") or "") for c in chunks_used).lower()
+        if is_abstain:
+            return {
+                "score": 5,
+                "notes": f"Fallback abstain (safe): answer abstained. Judge error: {e}",
+            }
+
+        def _tokenize(t: str) -> List[str]:
+            normalized = "".join(ch.lower() if (ch.isalnum() or ch.isspace()) else " " for ch in t)
+            return [w for w in normalized.split() if len(w) >= 3]
+
+        ans_tokens = set(_tokenize(answer_text))
+        ctx_tokens = set(_tokenize(context_text))
+        overlap = (len(ans_tokens & ctx_tokens) / len(ans_tokens)) if ans_tokens else 0.0
+
+        if overlap >= 0.80:
+            score = 5
+        elif overlap >= 0.60:
+            score = 4
+        elif overlap >= 0.40:
+            score = 3
+        elif overlap >= 0.20:
+            score = 2
+        else:
+            score = 1
+
+        return {
+            "score": score,
+            "notes": f"Fallback heuristic overlap={overlap:.2f}. Judge error: {e}",
+        }
 
 
 def score_answer_relevance(
@@ -113,10 +259,128 @@ def score_answer_relevance(
 
     TODO Sprint 4: Implement tương tự score_faithfulness
     """
-    return {
-        "score": None,
-        "notes": "TODO: Implement score_answer_relevance",
-    }
+    query_text = (query or "").strip()
+    answer_text = (answer or "").strip()
+    answer_lower = answer_text.lower()
+
+    abstain_markers = [
+        "i do not know",
+        "i don't know",
+        "không biết",
+        "khong biet",
+        "không đủ dữ liệu",
+        "khong du du lieu",
+        "insufficient context",
+    ]
+    is_abstain = any(marker in answer_lower for marker in abstain_markers)
+
+    if answer_text in ("", "PIPELINE_NOT_IMPLEMENTED") or answer_text.startswith("ERROR:"):
+        return {
+            "score": 1,
+            "notes": "Pipeline error/empty answer -> not relevant to question.",
+        }
+
+    # LLM-as-Judge for relevance.
+    try:
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("Missing OPENAI_API_KEY for LLM-as-Judge.")
+
+        judge_model = os.getenv("EVAL_JUDGE_MODEL", "gpt-4o")
+        client = OpenAI(api_key=api_key)
+
+        judge_prompt = f"""<role>
+You are a strict evaluator for answer relevance.
+</role>
+
+<task>
+Rate how directly and correctly the answer addresses the user question.
+</task>
+
+<rubric>
+5 = directly and fully answers the question
+4 = correct answer, minor missing detail
+3 = related but misses core focus
+2 = partially off-topic
+1 = does not answer the question
+</rubric>
+
+<question>
+{query_text}
+</question>
+
+<answer>
+{answer_text}
+</answer>
+
+<constraints>
+- Evaluate relevance only (not faithfulness, not style).
+- Keep reason short (max 25 words).
+</constraints>
+
+<output_format>
+Return strict JSON only (no markdown, no code block):
+{{"score": <integer 1-5>, "reason": "<short reason>"}}
+</output_format>
+"""
+
+        response = client.chat.completions.create(
+            model=judge_model,
+            messages=[{"role": "user", "content": judge_prompt}],
+            temperature=0,
+            max_tokens=220,
+        )
+        content = (response.choices[0].message.content or "").strip()
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            match = re.search(r"\{[\s\S]*\}", content)
+            if not match:
+                raise
+            parsed = json.loads(match.group(0))
+
+        score = int(parsed.get("score"))
+        score = max(1, min(5, score))
+        reason = (parsed.get("reason") or "LLM judge").strip()
+        return {
+            "score": score,
+            "notes": f"LLM-as-Judge ({judge_model}): {reason}",
+        }
+    except Exception as e:
+        # Fallback heuristic
+        if is_abstain:
+            # Abstain có thể relevant nếu query thiếu dữ liệu.
+            # Chấm trung bình-khá để tránh ưu ái quá mức khi chưa có judge.
+            return {
+                "score": 3,
+                "notes": f"Fallback abstain relevance=3. Judge error: {e}",
+            }
+
+        def _tokenize(t: str) -> List[str]:
+            normalized = "".join(ch.lower() if (ch.isalnum() or ch.isspace()) else " " for ch in t)
+            return [w for w in normalized.split() if len(w) >= 3]
+
+        q_tokens = set(_tokenize(query_text))
+        a_tokens = set(_tokenize(answer_text))
+        overlap = (len(q_tokens & a_tokens) / len(q_tokens)) if q_tokens else 0.0
+
+        if overlap >= 0.80:
+            score = 5
+        elif overlap >= 0.60:
+            score = 4
+        elif overlap >= 0.40:
+            score = 3
+        elif overlap >= 0.20:
+            score = 2
+        else:
+            score = 1
+
+        return {
+            "score": score,
+            "notes": f"Fallback heuristic overlap={overlap:.2f}. Judge error: {e}",
+        }
 
 
 def score_context_recall(
@@ -198,10 +462,133 @@ def score_completeness(
          Rate completeness 1-5. Are all key points covered?
          Output: {'score': int, 'missing_points': [str]}"
     """
-    return {
-        "score": None,
-        "notes": "TODO: Implement score_completeness (so sánh với expected_answer)",
-    }
+    query_text = (query or "").strip()
+    answer_text = (answer or "").strip()
+    expected_text = (expected_answer or "").strip()
+
+    if answer_text in ("", "PIPELINE_NOT_IMPLEMENTED") or answer_text.startswith("ERROR:"):
+        return {
+            "score": 1,
+            "notes": "Pipeline error/empty answer -> completeness is very low.",
+        }
+
+    if not expected_text:
+        return {
+            "score": None,
+            "notes": "No expected_answer provided.",
+        }
+
+    # Option 2: LLM-as-Judge
+    try:
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("Missing OPENAI_API_KEY for LLM-as-Judge.")
+
+        judge_model = os.getenv("EVAL_JUDGE_MODEL", "gpt-4o")
+        client = OpenAI(api_key=api_key)
+
+        judge_prompt = f"""<role>
+You are a strict evaluator for answer completeness.
+</role>
+
+<task>
+Compare model answer with expected answer and score completeness from 1 to 5.
+</task>
+
+<rubric>
+5 = includes all key points in expected answer
+4 = missing one minor detail
+3 = missing some important information
+2 = missing many important points
+1 = misses most core content
+</rubric>
+
+<question>
+{query_text}
+</question>
+
+<expected_answer>
+{expected_text}
+</expected_answer>
+
+<model_answer>
+{answer_text}
+</model_answer>
+
+<constraints>
+- Evaluate completeness only (not faithfulness, not style).
+- Identify concrete missing points vs expected answer.
+- Keep reason short (max 25 words).
+</constraints>
+
+<output_format>
+Return strict JSON only (no markdown, no code block):
+{{"score": <integer 1-5>, "reason": "<short reason>", "missing_points": ["..."]}}
+</output_format>
+"""
+
+        response = client.chat.completions.create(
+            model=judge_model,
+            messages=[{"role": "user", "content": judge_prompt}],
+            temperature=0,
+            max_tokens=260,
+        )
+        content = (response.choices[0].message.content or "").strip()
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            match = re.search(r"\{[\s\S]*\}", content)
+            if not match:
+                raise
+            parsed = json.loads(match.group(0))
+
+        score = int(parsed.get("score"))
+        score = max(1, min(5, score))
+        reason = (parsed.get("reason") or "LLM judge").strip()
+        missing_points = parsed.get("missing_points", [])
+        if not isinstance(missing_points, list):
+            missing_points = [str(missing_points)]
+        missing_points = [str(x).strip() for x in missing_points if str(x).strip()][:3]
+
+        notes = f"LLM-as-Judge ({judge_model}): {reason}"
+        if missing_points:
+            notes += f" | missing: {missing_points}"
+
+        return {
+            "score": score,
+            "notes": notes,
+        }
+    except Exception as e:
+        # Fallback heuristic: token coverage of expected answer by model answer.
+        def _tokenize(t: str) -> List[str]:
+            normalized = "".join(ch.lower() if (ch.isalnum() or ch.isspace()) else " " for ch in t)
+            return [w for w in normalized.split() if len(w) >= 3]
+
+        exp_tokens = set(_tokenize(expected_text))
+        ans_tokens = set(_tokenize(answer_text))
+        coverage = (len(exp_tokens & ans_tokens) / len(exp_tokens)) if exp_tokens else 0.0
+
+        if coverage >= 0.85:
+            score = 5
+        elif coverage >= 0.70:
+            score = 4
+        elif coverage >= 0.50:
+            score = 3
+        elif coverage >= 0.30:
+            score = 2
+        else:
+            score = 1
+
+        missing_tokens = sorted(list(exp_tokens - ans_tokens))[:6]
+        return {
+            "score": score,
+            "notes": (
+                f"Fallback heuristic coverage={coverage:.2f}. "
+                f"Missing token hints={missing_tokens}. Judge error: {e}"
+            ),
+        }
 
 
 # =============================================================================
@@ -314,6 +701,49 @@ def run_scorecard(
 
 
 # =============================================================================
+# GRADING RUN LOGGER
+# =============================================================================
+
+def run_grading_questions_log(
+    questions_path: Path = GRADING_QUESTIONS_PATH,
+    output_path: Path = GRADING_LOG_PATH,
+) -> List[Dict[str, Any]]:
+    """
+    Chạy bộ grading questions theo hybrid retrieval và lưu log JSON.
+    """
+    if not questions_path.exists():
+        print(f"Khong tim thay grading questions: {questions_path}")
+        return []
+
+    with open(questions_path, "r", encoding="utf-8") as f:
+        questions = json.load(f)
+
+    log = []
+    for q in questions:
+        result = rag_answer(
+            q["question"],
+            retrieval_mode="hybrid",
+            verbose=False,
+        )
+        log.append({
+            "id": q["id"],
+            "question": q["question"],
+            "answer": result["answer"],
+            "sources": result["sources"],
+            "chunks_retrieved": len(result["chunks_used"]),
+            "retrieval_mode": result["config"]["retrieval_mode"],
+            "timestamp": datetime.now().isoformat(),
+        })
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+
+    print(f"Da ghi grading log: {output_path} ({len(log)} cau)")
+    return log
+
+
+# =============================================================================
 # A/B COMPARISON
 # =============================================================================
 
@@ -354,11 +784,11 @@ def compare_ab(
 
         b_avg = sum(b_scores) / len(b_scores) if b_scores else None
         v_avg = sum(v_scores) / len(v_scores) if v_scores else None
-        delta = (v_avg - b_avg) if (b_avg and v_avg) else None
+        delta = (v_avg - b_avg) if (b_avg is not None and v_avg is not None) else None
 
-        b_str = f"{b_avg:.2f}" if b_avg else "N/A"
-        v_str = f"{v_avg:.2f}" if v_avg else "N/A"
-        d_str = f"{delta:+.2f}" if delta else "N/A"
+        b_str = f"{b_avg:.2f}" if b_avg is not None else "N/A"
+        v_str = f"{v_avg:.2f}" if v_avg is not None else "N/A"
+        d_str = f"{delta:+.2f}" if delta is not None else "N/A"
 
         print(f"{metric:<20} {b_str:>10} {v_str:>10} {d_str:>8}")
 
@@ -465,6 +895,10 @@ if __name__ == "__main__":
         print("Không tìm thấy file test_questions.json!")
         test_questions = []
 
+    # --- Chay grading log ---
+    print("\n--- Chay grading log (hybrid) ---")
+    run_grading_questions_log()
+
     # --- Chạy Baseline ---
     print("\n--- Chạy Baseline ---")
     print("Lưu ý: Cần hoàn thành Sprint 2 trước khi chạy scorecard!")
@@ -488,23 +922,23 @@ if __name__ == "__main__":
 
     # --- Chạy Variant (sau khi Sprint 3 hoàn thành) ---
     # TODO Sprint 4: Uncomment sau khi implement variant trong rag_answer.py
-    # print("\n--- Chạy Variant ---")
-    # variant_results = run_scorecard(
-    #     config=VARIANT_CONFIG,
-    #     test_questions=test_questions,
-    #     verbose=True,
-    # )
-    # variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
-    # (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
+    print("\n--- Chạy Variant ---")
+    variant_results = run_scorecard(
+        config=VARIANT_CONFIG,
+        test_questions=test_questions,
+        verbose=True,
+    )
+    variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
+    (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
 
     # --- A/B Comparison ---
     # TODO Sprint 4: Uncomment sau khi có cả baseline và variant
-    # if baseline_results and variant_results:
-    #     compare_ab(
-    #         baseline_results,
-    #         variant_results,
-    #         output_csv="ab_comparison.csv"
-    #     )
+    if baseline_results and variant_results:
+        compare_ab(
+            baseline_results,
+            variant_results,
+            output_csv="ab_comparison.csv"
+        )
 
     print("\n\nViệc cần làm Sprint 4:")
     print("  1. Hoàn thành Sprint 2 + 3 trước")
