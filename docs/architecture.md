@@ -1,6 +1,7 @@
-# Architecture - RAG Pipeline (Day 08 Lab)
+# Architecture — RAG Pipeline (Day 08 Lab)
 
-> Completed from Sprint 1-4 implementation and scorecard output.
+> Template: Điền vào các mục này khi hoàn thành từng sprint.
+> Deliverable của Documentation Owner.
 
 ## 1. Tổng quan kiến trúc
 
@@ -11,13 +12,13 @@
     ↓
 [ChromaDB Vector Store]
     ↓
-[rag_answer.py: Query → Retrieve/Hybrid → Select → Generate]
+[rag_answer.py: Query → Retrieve → Rerank → Generate]
     ↓
 [Grounded Answer + Citation]
 ```
 
 **Mô tả ngắn gọn:**
-Nhóm xây dựng trợ lý nội bộ cho CS và IT Helpdesk để trả lời câu hỏi về SLA, refund, access control, IT FAQ và HR policy. Pipeline dùng RAG để retrieve evidence từ 5 tài liệu nội bộ, sau đó sinh câu trả lời grounded bằng OpenAI, có citation `[1]` và abstain khi context không đủ.
+> TODO: Mô tả hệ thống trong 2-3 câu. Nhóm xây gì? Cho ai dùng? Giải quyết vấn đề gì?
 
 ---
 
@@ -26,23 +27,23 @@ Nhóm xây dựng trợ lý nội bộ cho CS và IT Helpdesk để trả lời 
 ### Tài liệu được index
 | File | Nguồn | Department | Số chunk |
 |------|-------|-----------|---------|
-| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | 6 |
-| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | 5 |
-| `access_control_sop.txt` | it/access-control-sop.md | IT Security | 8 |
-| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | 6 |
-| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | 5 |
+| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | TODO |
+| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | TODO |
+| `access_control_sop.txt` | it/access-control-sop.md | IT Security | TODO |
+| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | TODO |
+| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | TODO |
 
 ### Quyết định chunking
 | Tham số | Giá trị | Lý do |
 |---------|---------|-------|
-| Chunk size | 400 tokens ước lượng | Đủ lớn để giữ trọn một section/dieu khoản ngắn, vẫn nằm trong khuyến nghị 300-500 tokens. |
-| Overlap | 80 tokens ước lượng | Giữ ngữ cảnh khi section dài bị tách thành nhiều chunk. |
-| Chunking strategy | Heading-based rồi paragraph-based | Split theo heading `=== ... ===` trước để tránh cắt giữa điều khoản; nếu section quá dài thì ghép/tách theo paragraph. |
+| Chunk size | TODO tokens | TODO |
+| Overlap | TODO tokens | TODO |
+| Chunking strategy | Heading-based / paragraph-based | TODO |
 | Metadata fields | source, section, effective_date, department, access | Phục vụ filter, freshness, citation |
 
 ### Embedding model
-- **Model**: OpenAI `text-embedding-3-small` (mặc định nếu không set `OPENAI_EMBEDDING_MODEL`)
-- **Vector store**: ChromaDB (PersistentClient), collection `rag_lab`
+- **Model**: TODO (OpenAI text-embedding-3-small / paraphrase-multilingual-MiniLM-L12-v2)
+- **Vector store**: ChromaDB (PersistentClient)
 - **Similarity metric**: Cosine
 
 ---
@@ -60,14 +61,15 @@ Nhóm xây dựng trợ lý nội bộ cho CS và IT Helpdesk để trả lời 
 ### Variant (Sprint 3)
 | Tham số | Giá trị | Thay đổi so với baseline |
 |---------|---------|------------------------|
-| Strategy | Hybrid (dense + sparse/BM25) | Đổi `retrieval_mode` từ `dense` sang `hybrid` |
-| Top-k search | 10 | Giữ nguyên để tuân thủ A/B rule |
-| Top-k select | 3 | Giữ nguyên để tuân thủ A/B rule |
-| Rerank | Không dùng | Giữ nguyên `use_rerank=False` |
-| Query transform | Không dùng | Giữ nguyên |
+| Strategy | TODO (hybrid / dense) | TODO |
+| Top-k search | TODO | TODO |
+| Top-k select | TODO | TODO |
+| Rerank | TODO (cross-encoder / MMR) | TODO |
+| Query transform | TODO (expansion / HyDE / decomposition) | TODO |
 
 **Lý do chọn variant này:**
-Chọn hybrid vì corpus có cả câu tự nhiên và keyword/alias quan trọng như `P1`, `Level 3`, `Approval Matrix`, `ERR-403-AUTH`. BM25 giúp bắt exact terms và alias, còn dense retrieval giữ khả năng tìm theo nghĩa. Trong A/B test, chỉ đổi một biến là `retrieval_mode`; các tham số `top_k_search`, `top_k_select` và `use_rerank` giữ nguyên.
+> TODO: Giải thích tại sao chọn biến này để tune.
+> Ví dụ: "Chọn hybrid vì corpus có cả câu tự nhiên (policy) lẫn mã lỗi và tên chuyên ngành (SLA ticket P1, ERR-403)."
 
 ---
 
@@ -94,7 +96,7 @@ Answer:
 ### LLM Configuration
 | Tham số | Giá trị |
 |---------|---------|
-| Model | OpenAI `gpt-4o-mini` |
+| Model | TODO (gpt-4o-mini / gemini-1.5-flash) |
 | Temperature | 0 (để output ổn định cho eval) |
 | Max tokens | 512 |
 
@@ -114,28 +116,18 @@ Answer:
 
 ---
 
-## 6. Evaluation Summary
+## 6. Diagram (tùy chọn)
 
-| Metric | Baseline Dense | Variant Hybrid | Delta |
-|--------|----------------|----------------|-------|
-| Faithfulness | 4.70/5 | 4.70/5 | 0.00 |
-| Answer Relevance | 4.80/5 | 4.80/5 | 0.00 |
-| Context Recall | 5.00/5 | 5.00/5 | 0.00 |
-| Completeness | 4.00/5 | 4.00/5 | 0.00 |
-
-Baseline và hybrid đều retrieve đúng expected source cho các câu có expected source. Hybrid tạo câu trả lời tốt hơn về mặt diễn đạt ở q01 và q06, nhưng điểm tổng hợp không đổi vì dense baseline đã đủ mạnh trên bộ tài liệu nhỏ này. Điểm yếu còn lại chủ yếu nằm ở generation/completeness, đặc biệt q10 về VIP refund và các câu cần nêu đầy đủ ngoại lệ/điều kiện.
-
----
-
-## 7. Diagram
+> TODO: Vẽ sơ đồ pipeline nếu có thời gian. Có thể dùng Mermaid hoặc drawio.
 
 ```mermaid
 graph LR
     A[User Query] --> B[Query Embedding]
-    B --> C{Retrieval Mode}
-    C -->|Baseline dense| E[Vector Search Top-10]
-    C -->|Variant hybrid| F[Dense + BM25 + RRF]
-    E --> G[Top-3 Select]
+    B --> C[ChromaDB Vector Search]
+    C --> D[Top-10 Candidates]
+    D --> E{Rerank?}
+    E -->|Yes| F[Cross-Encoder]
+    E -->|No| G[Top-3 Select]
     F --> G
     G --> H[Build Context Block]
     H --> I[Grounded Prompt]
