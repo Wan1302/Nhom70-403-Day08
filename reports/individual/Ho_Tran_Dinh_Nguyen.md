@@ -27,7 +27,7 @@ Tuy nhiên, qua kết quả thực tế ở q06: hybrid lấy nhầm chunk về 
 
 Điều khó nhất là thiết kế **abstain logic**. Tôi đặt `ABSTAIN_SCORE_THRESHOLD=0.25` và chỉ áp dụng cho `dense` mode vì hybrid/sparse dùng RRF score (~0.009) — không thể so sánh với cùng ngưỡng cosine similarity.
 
-Kết quả thực tế cho thấy abstain vẫn chưa hoàn hảo: ở q09 (ERR-403-AUTH không có trong docs), baseline vượt ngưỡng 0.25 vì vector gần với chunk về Access Control (có chứa "403"), dẫn đến LLM hallucinate câu trả lời (`Faithfulness=4`, `Completeness=2`). Hybrid mode lại đi quá hướng ngược — abstain hoàn toàn, chỉ trả về "Tôi không biết" mà không có hướng dẫn nào (`Relevance=1`). Cả hai đều sai theo cách khác nhau, và lỗi nằm ở mức retrieval chứ không phải generation.
+Kết quả thực tế cho thấy abstain vẫn chưa hoàn hảo: ở q09 (ERR-403-AUTH không có trong docs), baseline vượt ngưỡng 0.25 vì vector gần với chunk về Access Control, dẫn đến LLM hallucinate câu trả lời (`Faithfulness=4`, `Completeness=2`). Hybrid mode lại đi quá hướng ngược — abstain hoàn toàn, chỉ trả về "Tôi không biết" mà không có hướng dẫn nào (`Relevance=1`). Cả hai đều sai theo cách khác nhau, và lỗi nằm ở mức retrieval chứ không phải generation.
 
 ---
 
