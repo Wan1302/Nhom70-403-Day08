@@ -129,10 +129,23 @@ Answer:
 | Failure Mode | Triệu chứng | Cách kiểm tra |
 |-------------|-------------|---------------|
 | Index lỗi | Retrieve về docs cũ / sai version | `inspect_metadata_coverage()` trong `index.py` |
-| Chunking tệ | Chunk cắt giữa điều khoản | `list_chunks()` và đọc text preview |
-| Retrieval noise | Trả về chunk liên quan nhưng không đúng trọng tâm | So sánh Hybrid có/không rerank trong `eval.py` |
-| Generation lỗi | Answer không grounded / bừa | `score_faithfulness()` trong `eval.py` |
-| Token overload | Context quá dài -> lost in the middle | Kiểm tra độ dài `context_block` |
+| Chunking tệ | Chunk cắt giữa điều khoản, mất section header | `list_chunks()` và đọc text preview |
+| Retrieval nhầm section | Lấy đúng document nhưng sai section trong cùng file | So sánh chunk text vs expected section trong `eval.py` |
+| Retrieval noise (cross-doc) | BM25 match keyword từ doc không liên quan | So sánh Hybrid có/không rerank trong `eval.py` |
+| Generation hallucinate | LLM thêm exception/điều kiện không có trong context | `score_faithfulness()` — xem câu nào F < 3 |
+| Abstain mơ hồ | Model nói "không biết" nhưng không giải thích lý do thiếu context | Kiểm tra câu Insufficient Context trong scorecard |
+| Completeness thấp | Answer đúng nhưng thiếu detail (con số, tên cụ thể) | `score_completeness()` — xem missing_points trong notes |
+| Token overload | Context quá dài → lost in the middle | Kiểm tra độ dài `context_block` |
+
+### Failure modes quan sát từ grading run (gq01–gq10, Variant B)
+
+| Câu | Failure Mode | Root Cause | Mức độ |
+|-----|-------------|-----------|--------|
+| gq02 | Completeness thấp | Thiếu tên phần mềm "Cisco AnyConnect" — nằm trong FAQ detail, không vào top chunk | Partial |
+| gq04 | Completeness thấp | Thiếu từ "tùy chọn" — một từ trong một câu duy nhất, dễ bị bỏ qua | Partial |
+| gq05 | Retrieval nhầm section | Lấy nhầm Section 4 (emergency temp access) thay vì Section 2 (Level 4 Admin procedure) trong cùng `access_control_sop.md` | Partial/Zero |
+| gq07 | Abstain mơ hồ | Model nói "Tôi không biết" nhưng không nêu rõ thông tin không có trong tài liệu | Partial (5/10) |
+| gq09 | Completeness thấp | Thiếu kênh đổi mật khẩu (SSO portal / ext. 9000) — nằm trong cùng chunk nhưng không được đưa vào answer | Partial |
 
 ---
 

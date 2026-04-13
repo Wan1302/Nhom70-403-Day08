@@ -41,19 +41,20 @@ Khó khăn kỹ thuật khác: parse JSON output từ judge model. Model đôi k
 
 ## 4. Phân tích một câu hỏi trong scorecard
 
-**Câu hỏi:** `q06` — *"Escalation trong sự cố P1 diễn ra như thế nào?"*
+**Câu hỏi:** `gq05` — *"Contractor từ bên ngoài công ty có thể được cấp quyền Admin Access không? Nếu có, cần bao nhiêu ngày và có yêu cầu đặc biệt gì?"*
 
 **Phân tích:**
 
-Đây là câu cho thấy rõ nhất tại sao hybrid cần rerank.
+Pipeline trả lời:
+> *"Có, contractor có thể được cấp quyền Admin Access tạm thời trong trường hợp khẩn cấp, tối đa 24 giờ sau khi được Tech Lead phê duyệt..."*
 
-**Baseline (dense):** Relevance=5, Completeness=4. Dense search tìm đúng chunk SLA escalation (`sla_p1_2026.txt`), model trả lời đúng quy trình 4 bước. Completeness=4 vì thêm một số bước phụ không có trong expected answer.
+Câu trả lời mắc lỗi **retrieval nghiêm trọng**: pipeline retrieve đúng `access_control_sop.md` nhưng lấy nhầm **Section 4 (emergency temporary access)** thay vì **Section 2 (Level 4 Admin Access procedure)**.
 
-**Variant A (hybrid, không rerank):** Relevance=3, Completeness=**1**. Đây là failure hoàn toàn. BM25 match keyword "escalate" và "IT Admin" từ `access_control_sop.txt` (tài liệu về cấp quyền), đưa chunk access control vào top-3. Model nhận context về "cấp quyền tạm thời 24 giờ" thay vì "auto-escalate trong 10 phút" — trả lời hoàn toàn sai topic dù Faithfulness=5 (bám đúng context nó nhận được, nhưng context đó sai).
+Lý do: câu hỏi có hai keyword mạnh — "contractor" và "Admin Access". BM25 match "Admin" và "IT Admin" từ Section 4 (emergency escalation) vì đoạn đó xuất hiện nhiều lần hơn trong corpus. Chunk Level 4 Admin Access nằm sâu hơn trong document và ít keyword overlap hơn. Kết quả là model nhận được context về quy trình khẩn cấp 24 giờ, trả lời sai hoàn toàn so với expected answer (quy trình thông thường 5 ngày, approver IT Manager + CISO, yêu cầu training bắt buộc).
 
-**Variant B (hybrid + rerank):** Relevance=5, Completeness=**5**. CrossEncoder re-score lại 10 candidates, nhận ra chunk SLA escalation semantically relevant hơn chunk access control với câu hỏi về P1 incident — đẩy đúng chunk lên top. Model trả lời đầy đủ: auto-escalate 10 phút + cấp quyền tạm thời 24 giờ trong trường hợp khẩn cấp.
+**Root cause:** Lỗi ở **retrieval + chunking**. Section 4 và Section 2 của access control doc đều có liên quan đến cấp quyền, nhưng bị lấy nhầm. Nếu chunking dùng heading-based tốt hơn (giữ nguyên section header trong mỗi chunk), CrossEncoder có thể phân biệt được "Emergency access" vs "Level 4 standard procedure" qua heading.
 
-Lỗi nằm ở **retrieval**, không phải generation hay indexing. Generation và indexing đều hoạt động đúng — vấn đề là ranking candidates trước khi build context block.
+**Đề xuất fix:** Thêm section title vào đầu mỗi chunk khi index (metadata `section` đã có, nhưng không được prepend vào chunk text). Khi rerank có cả "Section 2: Access Level Matrix" và "Section 4: Emergency Access" trong text, CrossEncoder sẽ score đúng hơn với câu hỏi về "Admin Access" quy trình thường.
 
 ---
 

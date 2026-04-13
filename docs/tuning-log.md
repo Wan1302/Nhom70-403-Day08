@@ -125,6 +125,36 @@ label = "variant_hybrid"
 
 ---
 
+## Grading Questions Run (gq01–gq10)
+
+**Ngày chạy:** 2026-04-13 17:52–17:53  
+**Config:** Variant B (hybrid + rerank) — cấu hình tốt nhất  
+**File kết quả:** `logs/grading_run.json`
+
+**Kết quả theo câu:**
+| ID | Câu hỏi tóm tắt | Kết quả | Ghi chú |
+|----|----------------|---------|---------|
+| gq01 | SLA P1 thay đổi thế nào? | **Full** | Đúng 4h/6h/v2026.1 |
+| gq02 | Remote VPN + thiết bị? | **Partial** | Thiếu tên "Cisco AnyConnect" |
+| gq03 | Flash Sale + kích hoạt → hoàn tiền? | **Full** | Đủ 2 ngoại lệ, kết luận rõ |
+| gq04 | Store credit bao nhiêu %? | **Partial** | Đúng 110% nhưng thiếu "tùy chọn" |
+| gq05 | Contractor + Admin Access? | **Partial/Zero** | Lấy nhầm emergency path vs Level 4 procedure |
+| gq06 | P1 lúc 2am + cấp quyền tạm thời? | **Full** | Đủ 4 criteria, cả 2 nguồn |
+| gq07 | Phạt vi phạm SLA P1? | **Partial** | Abstain "Tôi không biết" — không hallucinate nhưng mơ hồ |
+| gq08 | Nghỉ phép vs nghỉ ốm: "3 ngày"? | **Full** | Phân biệt đúng 2 ngữ cảnh |
+| gq09 | Mật khẩu đổi mấy ngày? | **Partial** | Đúng 90/7 ngày, thiếu kênh đổi |
+| gq10 | Effective date 01/02/2026? | **Full** | Kết luận rõ, đề cập v3 |
+
+**Phân tích 2 failure mode nổi bật:**
+
+**gq05 — Retrieval nhầm section trong cùng document:**  
+Pipeline retrieve đúng `access_control_sop.md` nhưng lấy Section 4 (emergency temp access, 24 giờ) thay vì Section 2 (Level 4 Admin procedure, 5 ngày + IT Manager + CISO). BM25 match mạnh trên "Admin" và "IT Admin" từ Section 4 vì keyword xuất hiện dày hơn. Fix đề xuất: prepend section heading vào chunk text khi index, giúp CrossEncoder phân biệt ngữ cảnh section.
+
+**gq07 — Abstain không đủ rõ ràng:**  
+Model trả lời "Tôi không biết" — không hallucinate (tốt), nhưng không giải thích lý do (thiếu một câu như "Thông tin về mức phạt không có trong tài liệu hiện có"). SCORING.md cho 5/10 với abstain mơ hồ. Fix đề xuất: thêm vào grounded prompt: *"If you cannot answer, explicitly state that the information is not found in the provided documents."*
+
+---
+
 ## Tóm tắt học được
 
 1. Hybrid một mình chưa đủ; vẫn cần rerank để lọc noise trước khi generate.
