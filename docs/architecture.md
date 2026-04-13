@@ -57,7 +57,7 @@ Hệ thống là trợ lý nội bộ cho khối CS + IT Helpdesk, trả lời c
 | Top-k select | 3 |
 | Rerank | Không |
 
-**Kết quả baseline:** Faithfulness 4.50 · Relevance 4.50 · Context Recall 5.00 · Completeness 3.90
+**Kết quả baseline:** Faithfulness 4.60 · Relevance 4.50 · Context Recall 5.00 · Completeness 3.30
 
 ### Variant A (lần chạy 1)
 | Tham số | Giá trị | Thay đổi so với baseline |
@@ -68,8 +68,8 @@ Hệ thống là trợ lý nội bộ cho khối CS + IT Helpdesk, trả lời c
 | Rerank | Không | Giữ nguyên |
 | Query transform | Không bật | Giữ nguyên |
 
-**Kết quả Variant A:** Faithfulness 4.70 · Relevance 4.10 · Context Recall 5.00 · Completeness 3.60  
-**Δ so với baseline:** Relevance −0.40 · Completeness −0.30 → **Kém hơn baseline**
+**Kết quả Variant A:** Faithfulness 4.80 · Relevance 4.20 · Context Recall 5.00 · Completeness 3.00  
+**Δ so với baseline:** Faithfulness +0.20 · Relevance −0.30 · Completeness −0.30 → **Kém hơn baseline về Relevance và Completeness**
 
 ### Variant B — Cấu hình được chọn (lần chạy 2)
 | Tham số | Giá trị | Thay đổi so với Variant A |
@@ -80,11 +80,11 @@ Hệ thống là trợ lý nội bộ cho khối CS + IT Helpdesk, trả lời c
 | Rerank | Có (`CrossEncoder: cross-encoder/ms-marco-MiniLM-L-6-v2`) | Không → Có |
 | Query transform | Không bật | Giữ nguyên |
 
-**Kết quả Variant B:** Faithfulness 4.70 · Relevance 4.80 · Context Recall 5.00 · Completeness 4.00  
-**Δ so với Variant A:** Relevance +0.70 · Completeness +0.40 → **Tốt nhất**
+**Kết quả Variant B:** Faithfulness 4.90 · Relevance 4.50 · Context Recall 5.00 · Completeness 3.20  
+**Δ so với Variant A:** Faithfulness +0.10 · Relevance +0.30 · Completeness +0.20 → **Tốt nhất**
 
 **Lý do chọn Variant B:**
-Variant A (hybrid không rerank) giảm Relevance và Completeness so với baseline vì BM25 đưa vào noise candidates. Khi bật rerank (Variant B), CrossEncoder re-score lại toàn bộ candidates — Relevance tăng +0.70, Completeness tăng +0.40 so với Variant A, Context Recall vẫn giữ nguyên 5.00. Case điển hình: `q06` (SLA escalation P1) — Variant A retrieve nhầm chunk access control, Variant B sửa được nhờ rerank.
+Variant A (hybrid không rerank) giảm Relevance và Completeness so với baseline vì BM25 đưa vào noise candidates. Khi bật rerank (Variant B), CrossEncoder re-score lại toàn bộ candidates — Relevance tăng +0.30, Completeness tăng +0.20 so với Variant A, Context Recall vẫn giữ nguyên 5.00. Case điển hình: `gq02` (VPN remote) — Variant A Relevance=3 vì thiếu source context, Variant B phục hồi Relevance=5.
 
 **Kết quả được lưu thành các file riêng:**
 - `results/scorecard_baseline.md`
@@ -141,11 +141,11 @@ Answer:
 
 | Câu | Failure Mode | Root Cause | Mức độ |
 |-----|-------------|-----------|--------|
-| gq02 | Completeness thấp | Thiếu tên phần mềm "Cisco AnyConnect" — nằm trong FAQ detail, không vào top chunk | Partial |
-| gq04 | Completeness thấp | Thiếu từ "tùy chọn" — một từ trong một câu duy nhất, dễ bị bỏ qua | Partial |
-| gq05 | Retrieval nhầm section | Lấy nhầm Section 4 (emergency temp access) thay vì Section 2 (Level 4 Admin procedure) trong cùng `access_control_sop.md` | Partial/Zero |
-| gq07 | Abstain mơ hồ | Model nói "Tôi không biết" nhưng không nêu rõ thông tin không có trong tài liệu | Partial (5/10) |
-| gq09 | Completeness thấp | Thiếu kênh đổi mật khẩu (SSO portal / ext. 9000) — nằm trong cùng chunk nhưng không được đưa vào answer | Partial |
+| gq05 | Retrieval nhầm section | BM25 match "Admin" / "IT Admin" từ Section 4 (emergency temp access) thay vì Section 2 (Level 4 Admin procedure) trong cùng `access_control_sop.md` — dẫn đến Completeness=1 dù Faithfulness=4, Relevance=5 | Zero (C=1) |
+| gq07 | Abstain mơ hồ | Model nói "Tôi không biết" nhưng không nêu rõ thông tin không có trong tài liệu — Relevance=1 ở cả 3 cấu hình | Partial (R=1) |
+| gq02 | Completeness thấp | Thiếu tên phần mềm "Cisco AnyConnect" và tham chiếu HR Policy — nằm trong cross-document context, không được đưa vào answer | Partial (C=2–3) |
+| gq09 | Completeness thấp | Thiếu kênh đổi mật khẩu (SSO portal / ext. 9000) — nằm trong cùng chunk nhưng không được đưa vào answer | Partial (C=3) |
+| gq01 | Completeness thấp | Thiếu version cũ v2025.3 và ngày hiệu lực 2026-01-15 — model chỉ nêu thay đổi số giờ mà không nêu context version | Partial (C=3–4) |
 
 ---
 
