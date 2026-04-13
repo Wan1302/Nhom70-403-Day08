@@ -57,36 +57,41 @@ Hệ thống là trợ lý nội bộ cho khối CS + IT Helpdesk, trả lời c
 | Top-k select | 3 |
 | Rerank | Không |
 
+**Kết quả baseline:** Faithfulness 4.50 · Relevance 4.50 · Context Recall 5.00 · Completeness 3.90
+
 ### Variant A (lần chạy 1)
 | Tham số | Giá trị | Thay đổi so với baseline |
 |---------|---------|------------------------|
-| Strategy | Hybrid (dense + sparse BM25) | Dense -> Hybrid |
+| Strategy | Hybrid (dense + sparse BM25) | Dense → Hybrid |
 | Top-k search | 10 | Giữ nguyên |
 | Top-k select | 3 | Giữ nguyên |
 | Rerank | Không | Giữ nguyên |
 | Query transform | Không bật | Giữ nguyên |
-| Label trong config | `variant_hybrid` | - |
 
-### Variant B (lần chạy 2)
+**Kết quả Variant A:** Faithfulness 4.70 · Relevance 4.10 · Context Recall 5.00 · Completeness 3.60  
+**Δ so với baseline:** Relevance −0.40 · Completeness −0.30 → **Kém hơn baseline**
+
+### Variant B — Cấu hình được chọn (lần chạy 2)
 | Tham số | Giá trị | Thay đổi so với Variant A |
 |---------|---------|---------------------------|
 | Strategy | Hybrid (dense + sparse BM25) | Giữ nguyên |
 | Top-k search | 10 | Giữ nguyên |
 | Top-k select | 3 | Giữ nguyên |
-| Rerank | Có (`CrossEncoder: cross-encoder/ms-marco-MiniLM-L-6-v2`) | Không -> Có |
+| Rerank | Có (`CrossEncoder: cross-encoder/ms-marco-MiniLM-L-6-v2`) | Không → Có |
 | Query transform | Không bật | Giữ nguyên |
-| Label trong config | `variant_hybrid` | - |
+
+**Kết quả Variant B:** Faithfulness 4.70 · Relevance 4.80 · Context Recall 5.00 · Completeness 4.00  
+**Δ so với Variant A:** Relevance +0.70 · Completeness +0.40 → **Tốt nhất**
 
 **Lý do chọn Variant B:**
-Variant A (hybrid không rerank) giảm relevance và completeness so với baseline. Khi bật rerank (Variant B), relevance và completeness tăng rõ trong khi context recall giữ nguyên 5.0. Điều này cho thấy rerank giúp lọc candidate trước khi build prompt.
+Variant A (hybrid không rerank) giảm Relevance và Completeness so với baseline vì BM25 đưa vào noise candidates. Khi bật rerank (Variant B), CrossEncoder re-score lại toàn bộ candidates — Relevance tăng +0.70, Completeness tăng +0.40 so với Variant A, Context Recall vẫn giữ nguyên 5.00. Case điển hình: `q06` (SLA escalation P1) — Variant A retrieve nhầm chunk access control, Variant B sửa được nhờ rerank.
 
 **Kết quả được lưu thành các file riêng:**
-- `results/scorecard_baseline_variant_a.md`
-- `results/scorecard_variant_a.md`
-- `results/ab_comparison_variant_a.csv`
-- `results/scorecard_baseline_variant_b.md`
-- `results/scorecard_variant_b.md`
-- `results/ab_comparison_variant_b.csv`
+- `results/scorecard_baseline.md`
+- `results/scorecard_variant.md` (= Variant B, best config)
+- `results/scorecard_variant_a.md`, `results/scorecard_variant_b.md` (chi tiết)
+- `results/ab_comparison_baseline_vs_a.csv` (dense vs hybrid)
+- `results/ab_comparison_a_vs_b.csv` (hybrid vs hybrid+rerank)
 
 ---
 

@@ -45,16 +45,15 @@ BASELINE_CONFIG = {
     "label": "baseline_dense",
 }
 
-# Cấu hình variant (Sprint 3 — điều chỉnh theo lựa chọn của nhóm)
-# VARIANT_CONFIG = {
-#     "retrieval_mode": "hybrid",
-#     "top_k_search": 10,
-#     "top_k_select": 3,
-#     "use_rerank": False,
-#     "label": "variant_hybrid",
-# }
+VARIANT_CONFIG_A = {
+    "retrieval_mode": "hybrid",
+    "top_k_search": 10,
+    "top_k_select": 3,
+    "use_rerank": False,
+    "label": "variant_hybrid",
+}
 
-VARIANT_CONFIG = {
+VARIANT_CONFIG_B = {
     "retrieval_mode": "hybrid",
     "top_k_search": 10,
     "top_k_select": 3,
@@ -713,13 +712,21 @@ def run_scorecard(
 
 def run_grading_questions_log(
     questions_path: Path = GRADING_QUESTIONS_PATH,
-    output_path: Path = GRADING_LOG_PATH,
+    output_path: Optional[Path] = None,
+    config: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Chạy bộ grading questions theo hybrid retrieval và lưu log JSON.
+    Chạy bộ grading questions theo config được chỉ định và lưu log JSON.
+    Mặc định dùng VARIANT_CONFIG_B (hybrid + rerank) nếu không truyền config.
     """
+    if config is None:
+        config = VARIANT_CONFIG_B
+    if output_path is None:
+        label = config.get("label", "run")
+        output_path = LOGS_DIR / f"grading_run_{label}.json"
+
     if not questions_path.exists():
-        print(f"Khong tim thay grading questions: {questions_path}")
+        print(f"Không tìm thấy grading questions: {questions_path}")
         return []
 
     with open(questions_path, "r", encoding="utf-8") as f:
@@ -729,7 +736,10 @@ def run_grading_questions_log(
     for q in questions:
         result = rag_answer(
             q["question"],
-            retrieval_mode="hybrid",
+            retrieval_mode=config.get("retrieval_mode", "hybrid"),
+            top_k_search=config.get("top_k_search", 10),
+            top_k_select=config.get("top_k_select", 3),
+            use_rerank=config.get("use_rerank", False),
             verbose=False,
         )
         log.append({
@@ -746,7 +756,7 @@ def run_grading_questions_log(
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(log, f, ensure_ascii=False, indent=2)
 
-    print(f"Da ghi grading log: {output_path} ({len(log)} cau)")
+    print(f"Đã ghi grading log: {output_path} ({len(log)} câu)")
     return log
 
 
@@ -758,6 +768,7 @@ def compare_ab(
     baseline_results: List[Dict],
     variant_results: List[Dict],
     output_csv: Optional[str] = None,
+    title: str = "Baseline vs Variant",
 ) -> None:
     """
     So sánh baseline vs variant theo từng câu hỏi và tổng thể.
@@ -780,7 +791,7 @@ def compare_ab(
     metrics = ["faithfulness", "relevance", "context_recall", "completeness"]
 
     print(f"\n{'='*70}")
-    print("A/B Comparison: Baseline vs Variant")
+    print(f"A/B Comparison: {title}")
     print('='*70)
     print(f"{'Metric':<20} {'Baseline':>10} {'Variant':>10} {'Delta':>8}")
     print("-" * 55)
@@ -886,71 +897,78 @@ if __name__ == "__main__":
     print("Sprint 4: Evaluation & Scorecard")
     print("=" * 60)
 
-    # Kiểm tra test questions
+    # Load test questions một lần dùng chung cho cả 3 bản
     print(f"\nLoading test questions từ: {TEST_QUESTIONS_PATH}")
     try:
         with open(TEST_QUESTIONS_PATH, "r", encoding="utf-8") as f:
             test_questions = json.load(f)
         print(f"Tìm thấy {len(test_questions)} câu hỏi")
-
-        # In preview
         for q in test_questions[:3]:
             print(f"  [{q['id']}] {q['question']} ({q['category']})")
         print("  ...")
-
     except FileNotFoundError:
         print("Không tìm thấy file test_questions.json!")
         test_questions = []
 
-    # --- Chay grading log ---
-    print("\n--- Chay grading log (hybrid) ---")
-    run_grading_questions_log()
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # --- Chạy Baseline ---
-    print("\n--- Chạy Baseline ---")
-    print("Lưu ý: Cần hoàn thành Sprint 2 trước khi chạy scorecard!")
-    try:
-        baseline_results = run_scorecard(
-            config=BASELINE_CONFIG,
-            test_questions=test_questions,
-            verbose=True,
-        )
+    # =========================================================
+    # Chạy 3 bản: baseline, variant_a, variant_b
+    # =========================================================
+    print("\n--- [1/3] Chạy Baseline (dense) ---")
+    baseline_results = run_scorecard(BASELINE_CONFIG, test_questions, verbose=True)
+    baseline_md = generate_scorecard_summary(baseline_results, BASELINE_CONFIG["label"])
+    (RESULTS_DIR / "scorecard_baseline.md").write_text(baseline_md, encoding="utf-8")
 
-        # Save scorecard
-        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        baseline_md = generate_scorecard_summary(baseline_results, "baseline_dense")
-        scorecard_path = RESULTS_DIR / "scorecard_baseline.md"
-        scorecard_path.write_text(baseline_md, encoding="utf-8")
-        print(f"\nScorecard lưu tại: {scorecard_path}")
+    print("\n--- [2/3] Chạy Variant A (hybrid, không rerank) ---")
+    variant_a_results = run_scorecard(VARIANT_CONFIG_A, test_questions, verbose=True)
+    variant_a_md = generate_scorecard_summary(variant_a_results, VARIANT_CONFIG_A["label"])
+    (RESULTS_DIR / "scorecard_variant_a.md").write_text(variant_a_md, encoding="utf-8")
 
-    except NotImplementedError:
-        print("Pipeline chưa implement. Hoàn thành Sprint 2 trước.")
-        baseline_results = []
-
-    # --- Chạy Variant (sau khi Sprint 3 hoàn thành) ---
-    # TODO Sprint 4: Uncomment sau khi implement variant trong rag_answer.py
-    print("\n--- Chạy Variant ---")
-    variant_results = run_scorecard(
-        config=VARIANT_CONFIG,
-        test_questions=test_questions,
-        verbose=True,
+    run_grading_questions_log(
+        config=VARIANT_CONFIG_A,
+        output_path=LOGS_DIR / "grading_run_variant_a.json",
     )
-    variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
-    (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
 
-    # --- A/B Comparison ---
-    # TODO Sprint 4: Uncomment sau khi có cả baseline và variant
-    if baseline_results and variant_results:
-        compare_ab(
-            baseline_results,
-            variant_results,
-            output_csv="ab_comparison.csv"
-        )
+    print("\n--- [3/3] Chạy Variant B (hybrid + rerank) ---")
+    variant_b_results = run_scorecard(VARIANT_CONFIG_B, test_questions, verbose=True)
+    variant_b_md = generate_scorecard_summary(variant_b_results, VARIANT_CONFIG_B["label"])
+    (RESULTS_DIR / "scorecard_variant_b.md").write_text(variant_b_md, encoding="utf-8")
 
-    print("\n\nViệc cần làm Sprint 4:")
-    print("  1. Hoàn thành Sprint 2 + 3 trước")
-    print("  2. Chấm điểm thủ công hoặc implement LLM-as-Judge trong score_* functions")
-    print("  3. Chạy run_scorecard(BASELINE_CONFIG)")
-    print("  4. Chạy run_scorecard(VARIANT_CONFIG)")
-    print("  5. Gọi compare_ab() để thấy delta")
-    print("  6. Cập nhật docs/tuning-log.md với kết quả và nhận xét")
+    run_grading_questions_log(
+        config=VARIANT_CONFIG_B,
+        output_path=LOGS_DIR / "grading_run_variant_b.json",
+    )
+
+    # =========================================================
+    # So sánh theo chuỗi: baseline -> A -> B
+    # =========================================================
+    print("\n--- Compare 1: Baseline vs Variant A ---")
+    compare_ab(
+        baseline_results,
+        variant_a_results,
+        output_csv="ab_comparison_baseline_vs_a.csv",
+        title="Baseline (dense) vs Variant A (hybrid)",
+    )
+
+    print("\n--- Compare 2: Variant A vs Variant B ---")
+    compare_ab(
+        variant_a_results,
+        variant_b_results,
+        output_csv="ab_comparison_a_vs_b.csv",
+        title="Variant A (hybrid) vs Variant B (hybrid + rerank)",
+    )
+
+    # =========================================================
+    # TỔNG KẾT
+    # =========================================================
+    print("\n" + "=" * 60)
+    print("Hoàn tất! Kết quả lưu tại:")
+    print(f"  results/scorecard_baseline.md")
+    print(f"  results/scorecard_variant_a.md")
+    print(f"  results/scorecard_variant_b.md")
+    print(f"  results/ab_comparison_baseline_vs_a.csv  (dense vs hybrid)")
+    print(f"  results/ab_comparison_a_vs_b.csv         (hybrid vs hybrid+rerank)")
+    print(f"  logs/grading_run_variant_a.json")
+    print(f"  logs/grading_run_variant_b.json")
+    print("=" * 60)
