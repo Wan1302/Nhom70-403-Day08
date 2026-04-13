@@ -2,14 +2,14 @@
   {
     "id": "q01",
     "question": "SLA xử lý ticket P1 là bao lâu?",
-    "answer": "SLA xử lý ticket P1 là 15 phút cho phản hồi ban đầu và 4 giờ cho xử lý và khắc phục [1].",
+    "answer": "SLA xử lý ticket P1 là 4 giờ để khắc phục và 15 phút để phản hồi ban đầu kể từ khi ticket được tạo [1].",
     "sources": [
       "support/sla-p1-2026.pdf",
       "policy/refund-v4.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:19.167627"
+    "timestamp": "2026-04-13T16:25:04.740156"
   },
   {
     "id": "q02",
@@ -20,18 +20,18 @@
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:21.118042"
+    "timestamp": "2026-04-13T16:25:06.533833"
   },
   {
     "id": "q03",
     "question": "Ai phải phê duyệt để cấp quyền Level 3?",
-    "answer": "Để cấp quyền Level 3, cần phê duyệt của Line Manager, IT Admin và IT Security [2].",
+    "answer": "Để cấp quyền Level 3, cần có sự phê duyệt của Line Manager, IT Admin và IT Security [2].",
     "sources": [
       "it/access-control-sop.md"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:22.885274"
+    "timestamp": "2026-04-13T16:25:08.696912"
   },
   {
     "id": "q04",
@@ -42,19 +42,19 @@
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:24.759744"
+    "timestamp": "2026-04-13T16:25:10.523304"
   },
   {
     "id": "q05",
     "question": "Tài khoản bị khóa sau bao nhiêu lần đăng nhập sai?",
     "answer": "Tài khoản bị khóa sau 5 lần đăng nhập sai liên tiếp. Để mở khóa, liên hệ IT Helpdesk hoặc tự reset qua portal SSO [1].",
     "sources": [
-      "policy/refund-v4.pdf",
-      "support/helpdesk-faq.md"
+      "support/helpdesk-faq.md",
+      "policy/refund-v4.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:26.886397"
+    "timestamp": "2026-04-13T16:25:12.123827"
   },
   {
     "id": "q06",
@@ -66,30 +66,30 @@
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:29.896574"
+    "timestamp": "2026-04-13T16:25:14.216159"
   },
   {
     "id": "q07",
     "question": "Approval Matrix để cấp quyền hệ thống là tài liệu nào?",
-    "answer": "Approval Matrix để cấp quyền hệ thống là tài liệu có tên \"Approval Matrix for System Access\" [1].",
+    "answer": "Approval Matrix để cấp quyền hệ thống là tài liệu trước đây có tên \"Approval Matrix for System Access\" [1].",
     "sources": [
       "it/access-control-sop.md"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:31.446652"
+    "timestamp": "2026-04-13T16:25:16.733650"
   },
   {
     "id": "q08",
     "question": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
-    "answer": "Nhân viên được làm remote tối đa 2 ngày mỗi tuần sau khi hoàn thành thời gian thử việc, và lịch remote phải được phê duyệt bởi Team Lead qua HR Portal [1].",
+    "answer": "Nhân viên được làm remote tối đa 2 ngày mỗi tuần sau khi hoàn thành thời gian thử việc [1].",
     "sources": [
       "it/access-control-sop.md",
       "hr/leave-policy-2026.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:33.584197"
+    "timestamp": "2026-04-13T16:25:18.202514"
   },
   {
     "id": "q09",
@@ -97,23 +97,23 @@
     "answer": "Tôi không biết.",
     "sources": [
       "it/access-control-sop.md",
-      "support/sla-p1-2026.pdf",
-      "support/helpdesk-faq.md"
+      "support/helpdesk-faq.md",
+      "support/sla-p1-2026.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:34.918990"
+    "timestamp": "2026-04-13T16:25:19.677814"
   },
   {
     "id": "q10",
     "question": "Nếu cần hoàn tiền khẩn cấp cho khách hàng VIP, quy trình có khác không?",
-    "answer": "Không có thông tin cụ thể nào trong bối cảnh về việc quy trình hoàn tiền cho khách hàng VIP có khác biệt hay không. Do đó, tôi không biết.",
+    "answer": "Không có thông tin cụ thể nào trong bối cảnh về việc quy trình hoàn tiền cho khách hàng VIP có khác biệt hay không. Tôi không biết.",
     "sources": [
       "it/access-control-sop.md",
       "policy/refund-v4.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:55:38.275628"
+    "timestamp": "2026-04-13T16:25:21.302353"
   }
 ]

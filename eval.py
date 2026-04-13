@@ -46,6 +46,14 @@ BASELINE_CONFIG = {
 }
 
 # Cấu hình variant (Sprint 3 — điều chỉnh theo lựa chọn của nhóm)
+# VARIANT_CONFIG = {
+#     "retrieval_mode": "hybrid",
+#     "top_k_search": 10,
+#     "top_k_select": 3,
+#     "use_rerank": False,
+#     "label": "variant_hybrid",
+# }
+
 VARIANT_CONFIG = {
     "retrieval_mode": "hybrid",
     "top_k_search": 10,
@@ -53,7 +61,6 @@ VARIANT_CONFIG = {
     "use_rerank": True,
     "label": "variant_hybrid",
 }
-
 
 # =============================================================================
 # SCORING FUNCTIONS
@@ -865,7 +872,7 @@ Generated: {timestamp}
     for r in results:
         md += (f"| {r['id']} | {r['category']} | {r.get('faithfulness', 'N/A')} | "
                f"{r.get('relevance', 'N/A')} | {r.get('context_recall', 'N/A')} | "
-               f"{r.get('completeness', 'N/A')} | {r.get('faithfulness_notes', '')[:50]} |\n")
+               f"{r.get('completeness', 'N/A')} | {r.get('faithfulness_notes', '')} |\n")
 
     return md
 
