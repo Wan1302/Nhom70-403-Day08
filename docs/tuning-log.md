@@ -1,13 +1,12 @@
 ﻿# Tuning Log - RAG Pipeline (Day 08 Lab)
 
-> A/B Rule: moi vong chi doi 1 bien de biet bien nao tao ra cai thien that su.
+> Template: Ghi lại mỗi thay đổi và kết quả quan sát được. A/B Rule: Chỉ đổi MỘT biến mỗi lần.
 
 ---
 
 ## Baseline (Sprint 2)
 
-**Ngay:** 2026-04-13  
-**Config:**
+**Config gốc (code):**
 ```python
 retrieval_mode = "dense"
 chunk_size = 400 tokens
@@ -18,109 +17,103 @@ use_rerank = False
 llm_model = "gpt-4o-mini"
 ```
 
-**Scorecard Baseline (lan so sanh voi Variant A):**
-| Metric | Average Score |
-|--------|--------------|
-| Faithfulness | 4.50 /5 |
-| Answer Relevance | 4.60 /5 |
-| Context Recall | 5.00 /5 |
-| Completeness | 3.80 /5 |
-
-**Cau hoi yeu nhat (diem thap):**
-- `q04` (Refund digital product): faithfulness thap do answer them ngoai le khong co trong context.
-- `q09` (ERR-403-AUTH): completeness thap vi khong co du lieu trong corpus de tra loi day du.
-- `q10` (VIP refund): relevance thap do cau tra loi abstain qua chung chung.
-
-**Gia thuyet nguyen nhan (Error Tree):**
-- [ ] Indexing: Chunking cat giua dieu khoan
-- [ ] Indexing: Metadata thieu effective_date
-- [x] Retrieval: Dense bo lo keyword/intent dac thu
-- [ ] Retrieval: Top-k qua it -> thieu evidence
-- [x] Generation: Prompt abstain chua toi uu cho cau hoi "khong du du lieu"
-- [ ] Generation: Context qua dai -> lost in the middle
-
 ---
 
-## Variant 1 (Sprint 3) - Variant A
+## Variant A (Hybrid, không rerank)
 
-**Ngay:** 2026-04-13  
-**Bien thay doi:** `retrieval_mode: dense -> hybrid` (giu nguyen rerank=False)
+**Ngày chạy:** 2026-04-13 16:22 -> 16:23  
+**File kết quả:**
+- `results/scorecard_baseline_variant_a.md`
+- `results/scorecard_variant_a.md`
+- `results/ab_comparison_variant_a.csv`
 
-**Ly do chon bien nay:**
-Baseline co nhom cau hoi pha tron natural language + keyword/ma loi. Hybrid du kien giup lay du context on dinh hon dense thuần.
+**Biến thay đổi:**
+- `retrieval_mode: dense -> hybrid`
+- `use_rerank` giữ `False`
 
-**Config thay doi:**
+**Config Variant A:**
 ```python
 retrieval_mode = "hybrid"
+top_k_search = 10
+top_k_select = 3
 use_rerank = False
-# Cac tham so con lai giu nguyen
+label = "variant_hybrid"
 ```
 
-**Scorecard Variant 1:**
-| Metric | Baseline | Variant 1 | Delta |
-|--------|----------|-----------|-------|
-| Faithfulness | 4.50/5 | 4.60/5 | +0.10 |
-| Answer Relevance | 4.60/5 | 4.20/5 | -0.40 |
+**So sánh trung bình (Baseline A vs Variant A):**
+| Metric | Baseline A | Variant A | Delta |
+|--------|------------|-----------|-------|
+| Faithfulness | 4.60/5 | 4.60/5 | +0.00 |
+| Answer Relevance | 4.70/5 | 4.20/5 | -0.50 |
 | Context Recall | 5.00/5 | 5.00/5 | +0.00 |
 | Completeness | 3.80/5 | 3.50/5 | -0.30 |
 
-**Nhan xet:**
-- Cai thien nhe o faithfulness.
-- Giam ro o relevance/completeness, giam manh o `q06` va `q09`.
-- `q10` tot hon baseline (relevance tang), nhung tong the van kem baseline.
+**Nhận xét:**
+- Variant A không cải thiện tổng thể.
+- Giảm rõ nhất ở `q06` và `q09`.
+- `q10` có cải thiện relevance, nhưng không đủ để kéo điểm tổng.
 
-**Ket luan Variant 1:**
-Variant A chua tot hon baseline o tong the. Hybrid khong rerank co dau hieu lay du context nhung chua loc duoc chunk nhiễu.
+**Kết luận Variant A:**
+- Không tốt hơn so với baseline ở lần chạy này.
 
 ---
 
-## Variant 2 (Sprint 3) - Variant B
+## Variant B (Hybrid + rerank)
 
-**Ngay:** 2026-04-13  
-**Bien thay doi:** `use_rerank: False -> True` (tren nen Hybrid)
+**Ngày chạy:** 2026-04-13 16:26 -> 16:27  
+**File kết quả:**
+- `results/scorecard_baseline_variant_b.md`
+- `results/scorecard_variant_b.md`
+- `results/ab_comparison_variant_b.csv`
 
-**Config:**
+**Biến thay đổi:**
+- Trên nền Hybrid, đổi `use_rerank: False -> True`
+
+**Config Variant B:**
 ```python
 retrieval_mode = "hybrid"
 top_k_search = 10
 top_k_select = 3
 use_rerank = True
+label = "variant_hybrid"
 ```
 
-**Scorecard Variant 2 (so voi baseline o cung lan chay):**
-| Metric | Baseline | Variant 2 | Delta |
-|--------|----------|-----------|-------|
-| Faithfulness | 4.60/5 | 4.70/5 | +0.10 |
-| Answer Relevance | 4.60/5 | 4.80/5 | +0.20 |
+**So sánh trung bình (Baseline B vs Variant B):**
+| Metric | Baseline B | Variant B | Delta |
+|--------|------------|-----------|-------|
+| Faithfulness | 4.60/5 | 4.60/5 | +0.00 |
+| Answer Relevance | 4.50/5 | 4.80/5 | +0.30 |
 | Context Recall | 5.00/5 | 5.00/5 | +0.00 |
 | Completeness | 3.70/5 | 4.10/5 | +0.40 |
 
-**Nhan xet:**
-- Cai thien ro o `q06`, `q08`, `q10`; `q09` cung on dinh hon.
-- Context recall giu nguyen 5.00, cho thay rerank chu yeu giup quality cua context dua vao prompt.
+**Nhận xét:**
+- Cải thiện rõ relevance và completeness.
+- Câu cải thiện nhiều: `q06`, `q08`, `q09`, `q10`.
+- Context recall giữ nguyên 5.00, cho thấy rerank chủ yếu nâng chất lượng chunk dựa vào prompt.
+
+**Kết luận Variant B:**
+- Tốt nhất trong 2 variant đã thử.
+- Nên chốt cấu hình tạm thời là `hybrid + rerank`.
 
 ---
 
-## Tong hop 3 cau hinh
+## Tổng hợp để chốt cấu hình
 
-| Metric | Baseline | Variant 1 (Hybrid) | Variant 2 (Hybrid + Rerank) | Best |
-|--------|----------|--------------------|-----------------------------|------|
-| Faithfulness | 4.60 | 4.60 | 4.70 | Variant 2 |
-| Answer Relevance | 4.60 | 4.20 | 4.80 | Variant 2 |
-| Context Recall | 5.00 | 5.00 | 5.00 | Tie |
-| Completeness | 3.70 | 3.50 | 4.10 | Variant 2 |
+| Cấu hình | Faithfulness | Relevance | Context Recall | Completeness |
+|----------|--------------|-----------|----------------|--------------|
+| Baseline A | 4.60 | 4.70 | 5.00 | 3.80 |
+| Variant A | 4.60 | 4.20 | 5.00 | 3.50 |
+| Baseline B | 4.60 | 4.50 | 5.00 | 3.70 |
+| Variant B | 4.60 | 4.80 | 5.00 | 4.10 |
 
-> Ghi chu: baseline trong hai lan chay co dao dong nho (faithfulness/completeness), do LLM-as-Judge va generation co tinh xac suat.
+**Kết luận cuối**
+- `Variant B (hybrid + rerank)` là lựa chọn tốt nhất.
+- Vì cả Variant A và Variant B đang để chung `label = "variant_hybrid"`, nên tiếp tục lưu file tách riêng như hiện tại (`*_variant_a*`, `*_variant_b*`) để tránh ghi đè kết quả.
 
 ---
 
-## Tom tat hoc duoc
+## Tóm tắt học được
 
-1. **Loi pho bien nhat trong pipeline nay la gi?**
-   Retrieval khong phai luc nao cung la diem nghẽn; van de lon la context nao duoc dua vao prompt sau cung. Rerank giup giam noise ro ret.
-
-2. **Bien nao co tac dong lon nhat toi chat luong?**
-   Bat `use_rerank=True` tren nen Hybrid cho tac dong lon nhat (dac biet completeness +0.40).
-
-3. **Neu co them 1 gio, nhom se thu gi tiep theo?**
-   Tinh chinh prompt abstain + bo sung rule citation bat buoc theo source/section de cai thien tiep q04, q09, q10.
+1. Hybrid một mình chưa đủ; vẫn cần rerank để lọc noise trước khi generate.
+2. Rerank không làm mất context recall, nhưng giúp tăng relevance/completeness rõ ràng.
+3. Nếu có thêm thời gian, nên tune prompt abstain và rule citation để cải thiện tiếp q04, q09, q10.

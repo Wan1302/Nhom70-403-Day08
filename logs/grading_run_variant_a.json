@@ -4,12 +4,12 @@
     "question": "SLA xử lý ticket P1 là bao lâu?",
     "answer": "SLA xử lý ticket P1 là 4 giờ để khắc phục và 15 phút để phản hồi ban đầu kể từ khi ticket được tạo [1].",
     "sources": [
-      "policy/refund-v4.pdf",
-      "support/sla-p1-2026.pdf"
+      "support/sla-p1-2026.pdf",
+      "policy/refund-v4.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:42.500180"
+    "timestamp": "2026-04-13T16:21:17.225832"
   },
   {
     "id": "q02",
@@ -20,18 +20,18 @@
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:44.243137"
+    "timestamp": "2026-04-13T16:21:19.334139"
   },
   {
     "id": "q03",
     "question": "Ai phải phê duyệt để cấp quyền Level 3?",
-    "answer": "Để cấp quyền Level 3, cần phê duyệt của Line Manager, IT Admin và IT Security [2].",
+    "answer": "Để cấp quyền Level 3, cần có sự phê duyệt của Line Manager, IT Admin và IT Security [2].",
     "sources": [
       "it/access-control-sop.md"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:46.630135"
+    "timestamp": "2026-04-13T16:21:21.250165"
   },
   {
     "id": "q04",
@@ -42,7 +42,7 @@
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:49.163759"
+    "timestamp": "2026-04-13T16:21:23.260282"
   },
   {
     "id": "q05",
@@ -54,19 +54,19 @@
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:50.889605"
+    "timestamp": "2026-04-13T16:21:24.892157"
   },
   {
     "id": "q06",
     "question": "Escalation trong sự cố P1 diễn ra như thế nào?",
     "answer": "Escalation trong sự cố P1 diễn ra như sau: On-call IT Admin có thể cấp quyền tạm thời (tối đa 24 giờ) sau khi được Tech Lead phê duyệt bằng lời. Sau 24 giờ, phải có ticket chính thức hoặc quyền sẽ bị thu hồi tự động. Tất cả quyền tạm thời phải được ghi log vào hệ thống Security Audit [1].",
     "sources": [
-      "support/sla-p1-2026.pdf",
-      "it/access-control-sop.md"
+      "it/access-control-sop.md",
+      "support/sla-p1-2026.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:53.849490"
+    "timestamp": "2026-04-13T16:21:27.202674"
   },
   {
     "id": "q07",
@@ -77,43 +77,43 @@
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:55.672922"
+    "timestamp": "2026-04-13T16:21:28.685407"
   },
   {
     "id": "q08",
     "question": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
-    "answer": "Nhân viên được làm remote tối đa 2 ngày mỗi tuần sau khi hoàn thành thời gian thử việc [1].",
+    "answer": "Nhân viên được làm remote tối đa 2 ngày mỗi tuần sau khi hoàn thành thời gian thử việc, và lịch remote phải được phê duyệt bởi Team Lead qua HR Portal [1].",
     "sources": [
       "it/access-control-sop.md",
       "hr/leave-policy-2026.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:58.083539"
+    "timestamp": "2026-04-13T16:21:30.670593"
   },
   {
     "id": "q09",
     "question": "ERR-403-AUTH là lỗi gì và cách xử lý?",
     "answer": "Tôi không biết.",
     "sources": [
-      "support/sla-p1-2026.pdf",
       "it/access-control-sop.md",
-      "support/helpdesk-faq.md"
+      "support/helpdesk-faq.md",
+      "support/sla-p1-2026.pdf"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:46:59.731946"
+    "timestamp": "2026-04-13T16:21:31.992295"
   },
   {
     "id": "q10",
     "question": "Nếu cần hoàn tiền khẩn cấp cho khách hàng VIP, quy trình có khác không?",
-    "answer": "Không có thông tin cụ thể nào trong bối cảnh về việc quy trình hoàn tiền cho khách hàng VIP có khác biệt hay không. Tôi không biết.",
+    "answer": "Không có thông tin cụ thể nào trong bối cảnh về việc quy trình hoàn tiền cho khách hàng VIP có khác biệt hay không. Do đó, tôi không biết.",
     "sources": [
       "policy/refund-v4.pdf",
       "it/access-control-sop.md"
     ],
     "chunks_retrieved": 3,
     "retrieval_mode": "hybrid",
-    "timestamp": "2026-04-13T15:47:01.294661"
+    "timestamp": "2026-04-13T16:21:33.796030"
   }
 ]
