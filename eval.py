@@ -30,8 +30,8 @@ from rag_answer import rag_answer
 # CẤU HÌNH
 # =============================================================================
 
-TEST_QUESTIONS_PATH = Path(__file__).parent / "data" / "test_questions.json"
-GRADING_QUESTIONS_PATH = Path(__file__).parent / "data" / "test_questions.json"
+TEST_QUESTIONS_PATH = Path(__file__).parent / "data" / "grading_questions.json"
+GRADING_QUESTIONS_PATH = Path(__file__).parent / "data" / "grading_questions.json"
 RESULTS_DIR = Path(__file__).parent / "results"
 LOGS_DIR = Path(__file__).parent / "logs"
 GRADING_LOG_PATH = LOGS_DIR / "grading_run.json"
