@@ -33,21 +33,23 @@ Kết quả thực tế cho thấy abstain vẫn chưa hoàn hảo: ở q09 (ERR
 
 ## 4. Phân tích một câu hỏi trong scorecard (150-200 từ)
 
-**Câu hỏi:** *"Sản phẩm kỹ thuật số có được hoàn tiền không?"* (q04 — category: Refund, difficulty: medium)
+**Câu hỏi:** *"Contractor từ bên ngoài công ty có thể được cấp quyền Admin Access không? Nếu có, cần bao nhiêu ngày và có yêu cầu đặc biệt gì?"* (gq05 — category: Access Control, difficulty: hard)
 
 **Phân tích:**
 
-Đây là câu hỏi mà retrieval hoạt động đúng (Context Recall=5 ở cả baseline và hybrid — chunk từ `policy/refund-v4.pdf` được lấy về đầy đủ), nhưng **generation thất bại**. Baseline cho `Faithfulness=1` vì LLM trả lời: *"không được hoàn tiền, trừ khi có lỗi do nhà sản xuất"* — thông tin về ngoại lệ nhà sản xuất không có trong context. Hybrid cũng tương tự, `Faithfulness=2`.
+Pipeline trả lời: *"Có, contractor có thể được cấp Admin Access tạm thời trong trường hợp khẩn cấp, tối đa 24 giờ sau khi được Tech Lead phê duyệt bằng lời..."*
 
-Lỗi nằm hoàn toàn ở **generation**: LLM thêm thông tin không có trong docs dù prompt đã ép "Answer only from the retrieved context". Đây là hallucination điển hình khi model có prior knowledge về refund policy thực tế và "tự điền" vào.
+Câu trả lời đúng là: Level 4 Admin Access theo quy trình tiêu chuẩn — cần phê duyệt từ IT Manager + CISO, thời gian xử lý 5 ngày làm việc, bắt buộc training security policy.
 
-Cả baseline lẫn hybrid đều thất bại ở câu này với cùng lý do — thay đổi retrieval strategy không giải quyết được vấn đề generation. Fix cần nhắm vào prompt: thêm ràng buộc cứng hơn, ví dụ *"Do NOT add any exceptions or conditions not explicitly stated in the context."*
+Lỗi nằm ở **retrieval**: hybrid lấy nhầm chunk về *emergency temporary access* (24 giờ, Tech Lead phê duyệt bằng lời) thay vì chunk về *Level 4 Admin Access* (5 ngày, IT Manager + CISO). Cả hai chunk đều từ cùng file `access-control-sop.md`, đều chứa keyword "contractor" và "Admin" — cross-encoder rerank cũng không phân biệt được vì cả hai chunk đều có độ liên quan cao với câu hỏi.
+
+Root cause: pipeline không có cơ chế phân biệt section trong cùng một document. Fix cụ thể: thêm metadata filter theo `section` trong retrieval, hoặc expand query thành "Level 4 Admin Access" để bias về đúng section.
 
 ---
 
 ## 5. Nếu có thêm thời gian, tôi sẽ làm gì? (50-100 từ)
 
-Có hai cải tiến cụ thể: Thứ nhất, thêm negative constraint vào `build_grounded_prompt` vì eval cho thấy q04 hallucinate dù retrieval đúng — prompt hiện tại chưa đủ mạnh để ngăn LLM thêm prior knowledge. Thứ hai, tích hợp `transform_query` với strategy `"expansion"` vào `rag_answer` cho q07 (Approval Matrix alias) — cả baseline lẫn hybrid đều cho Completeness=3 vì không nhận ra tên mới "Access Control SOP", query expansion có thể giải quyết trực tiếp vấn đề này.
+Có hai cải tiến cụ thể: Thứ nhất, thêm section-level metadata filter vào `retrieve_dense` và `retrieve_hybrid` — gq05 cho thấy pipeline lấy nhầm section trong cùng một document dù rerank đã bật, và cách fix trực tiếp nhất là filter theo `section` metadata khi query có từ khóa định danh rõ ràng ("Level 4", "Admin Access"). Thứ hai, sửa abstain message trong `rag_answer` từ "Tôi không biết" thành nêu rõ lý do — gq07 chỉ đạt 5/10 vì abstain mơ hồ, trong khi thêm một câu *"Thông tin này không có trong tài liệu nội bộ hiện có"* sẽ đủ điều kiện Full marks theo rubric.
 
 ---
 
