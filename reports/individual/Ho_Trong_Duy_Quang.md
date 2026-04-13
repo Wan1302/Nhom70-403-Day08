@@ -1,7 +1,7 @@
 # Báo Cáo Cá Nhân - Lab Day 08: RAG Pipeline
 
 **Họ và tên:** Hồ Trọng Duy Quang - 2A202600081
-**Vai trò trong nhóm:** Indexing / Retrieval support  
+**Vai trò trong nhóm:** Retrieval Owner  
 **Ngày nộp:** 2026-04-13  
 
 ---
