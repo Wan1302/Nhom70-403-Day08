@@ -1,49 +1,48 @@
-# Architecture — RAG Pipeline (Day 08 Lab)
+﻿# Architecture - RAG Pipeline (Day 08 Lab)
 
-> Template: Điền vào các mục này khi hoàn thành từng sprint.
-> Deliverable của Documentation Owner.
+## 1. Tong quan kien truc
 
-## 1. Tổng quan kiến trúc
-
-```
+```text
 [Raw Docs]
-    ↓
-[index.py: Preprocess → Chunk → Embed → Store]
-    ↓
+    ->
+[index.py: Preprocess -> Chunk -> Embed -> Store]
+    ->
 [ChromaDB Vector Store]
-    ↓
-[rag_answer.py: Query → Retrieve → Rerank → Generate]
-    ↓
+    ->
+[rag_answer.py: Query -> Retrieve -> (Rerank) -> Generate]
+    ->
 [Grounded Answer + Citation]
 ```
 
-**Mô tả ngắn gọn:**
-> TODO: Mô tả hệ thống trong 2-3 câu. Nhóm xây gì? Cho ai dùng? Giải quyết vấn đề gì?
+**Mo ta ngan gon:**
+He thong la tro ly noi bo cho khoi CS + IT Helpdesk, tra loi cau hoi ve SLA, refund policy, access control va HR policy dua tren tai lieu noi bo. Pipeline dung RAG de retrieve chung cu truoc, sau do moi generate cau tra loi co citation. Muc tieu la giam hallucination va co the audit theo source.
 
 ---
 
 ## 2. Indexing Pipeline (Sprint 1)
 
-### Tài liệu được index
-| File | Nguồn | Department | Số chunk |
+### Tai lieu duoc index
+| File | Nguon | Department | So chunk |
 |------|-------|-----------|---------|
-| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | TODO |
-| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | TODO |
-| `access_control_sop.txt` | it/access-control-sop.md | IT Security | TODO |
-| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | TODO |
-| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | TODO |
+| `policy_refund_v4.txt` | `policy/refund-v4.pdf` | CS | 6 |
+| `sla_p1_2026.txt` | `support/sla-p1-2026.pdf` | IT | 5 |
+| `access_control_sop.txt` | `it/access-control-sop.md` | IT Security | 8 |
+| `it_helpdesk_faq.txt` | `support/helpdesk-faq.md` | IT | 6 |
+| `hr_leave_policy.txt` | `hr/leave-policy-2026.pdf` | HR | 5 |
 
-### Quyết định chunking
-| Tham số | Giá trị | Lý do |
+**Tong:** 30 chunks.
+
+### Quyet dinh chunking
+| Tham so | Gia tri | Ly do |
 |---------|---------|-------|
-| Chunk size | TODO tokens | TODO |
-| Overlap | TODO tokens | TODO |
-| Chunking strategy | Heading-based / paragraph-based | TODO |
-| Metadata fields | source, section, effective_date, department, access | Phục vụ filter, freshness, citation |
+| Chunk size | ~400 tokens (`CHUNK_SIZE=400`) | Du de giu tron nghia theo section/paragraph, khong qua dai cho prompt |
+| Overlap | ~80 tokens (`CHUNK_OVERLAP=80`) | Giam mat context tai bien chunk |
+| Chunking strategy | Heading-based -> paragraph-based fallback | Uu tien ranh gioi tu nhien (`=== ... ===`), sau do split paragraph co overlap |
+| Metadata fields | `source`, `section`, `department`, `effective_date`, `access` | Phuc vu filter, freshness, citation, audit |
 
 ### Embedding model
-- **Model**: TODO (OpenAI text-embedding-3-small / paraphrase-multilingual-MiniLM-L12-v2)
-- **Vector store**: ChromaDB (PersistentClient)
+- **Model**: `text-embedding-3-small` (OpenAI)
+- **Vector store**: ChromaDB `PersistentClient` tai `chroma_db_runtime/`
 - **Similarity metric**: Cosine
 
 ---
@@ -51,32 +50,31 @@
 ## 3. Retrieval Pipeline (Sprint 2 + 3)
 
 ### Baseline (Sprint 2)
-| Tham số | Giá trị |
+| Tham so | Gia tri |
 |---------|---------|
-| Strategy | Dense (embedding similarity) |
+| Strategy | Dense |
 | Top-k search | 10 |
 | Top-k select | 3 |
-| Rerank | Không |
+| Rerank | Khong |
 
-### Variant (Sprint 3)
-| Tham số | Giá trị | Thay đổi so với baseline |
+### Variant duoc chon de trien khai tiep (Variant B)
+| Tham so | Gia tri | Thay doi so voi baseline |
 |---------|---------|------------------------|
-| Strategy | TODO (hybrid / dense) | TODO |
-| Top-k search | TODO | TODO |
-| Top-k select | TODO | TODO |
-| Rerank | TODO (cross-encoder / MMR) | TODO |
-| Query transform | TODO (expansion / HyDE / decomposition) | TODO |
+| Strategy | Hybrid (dense + sparse BM25) | Dense -> Hybrid |
+| Top-k search | 10 | Giu nguyen |
+| Top-k select | 3 | Giu nguyen |
+| Rerank | Co (`CrossEncoder: cross-encoder/ms-marco-MiniLM-L-6-v2`) | Khong -> Co |
+| Query transform | Khong bat | Giu nguyen |
 
-**Lý do chọn variant này:**
-> TODO: Giải thích tại sao chọn biến này để tune.
-> Ví dụ: "Chọn hybrid vì corpus có cả câu tự nhiên (policy) lẫn mã lỗi và tên chuyên ngành (SLA ticket P1, ERR-403)."
+**Ly do chon Variant B:**
+Variant A (hybrid khong rerank) khong on dinh o relevance/completeness. Khi bat rerank (Variant B), trung binh relevance va completeness tang ro, trong khi context recall giu nguyen 5.0. Dieu nay cho thay noise retrieval da duoc loc tot hon truoc khi vao prompt.
 
 ---
 
 ## 4. Generation (Sprint 2)
 
 ### Grounded Prompt Template
-```
+```text
 Answer only from the retrieved context below.
 If the context is insufficient, say you do not know.
 Cite the source field when possible.
@@ -94,43 +92,41 @@ Answer:
 ```
 
 ### LLM Configuration
-| Tham số | Giá trị |
+| Tham so | Gia tri |
 |---------|---------|
-| Model | TODO (gpt-4o-mini / gemini-1.5-flash) |
-| Temperature | 0 (để output ổn định cho eval) |
+| Model | `gpt-4o-mini` |
+| Temperature | 0 |
 | Max tokens | 512 |
 
 ---
 
 ## 5. Failure Mode Checklist
 
-> Dùng khi debug — kiểm tra lần lượt: index → retrieval → generation
-
-| Failure Mode | Triệu chứng | Cách kiểm tra |
+| Failure Mode | Trieu chung | Cach kiem tra |
 |-------------|-------------|---------------|
-| Index lỗi | Retrieve về docs cũ / sai version | `inspect_metadata_coverage()` trong index.py |
-| Chunking tệ | Chunk cắt giữa điều khoản | `list_chunks()` và đọc text preview |
-| Retrieval lỗi | Không tìm được expected source | `score_context_recall()` trong eval.py |
-| Generation lỗi | Answer không grounded / bịa | `score_faithfulness()` trong eval.py |
-| Token overload | Context quá dài → lost in the middle | Kiểm tra độ dài context_block |
+| Index loi | Retrieve ve docs cu / sai version | `inspect_metadata_coverage()` trong `index.py` |
+| Chunking te | Chunk cat giua dieu khoan | `list_chunks()` va doc text preview |
+| Retrieval noise | Tra ve chunk lien quan nhung khong dung trong tam | So sanh Hybrid co/khong rerank trong `eval.py` |
+| Generation loi | Answer khong grounded / bua | `score_faithfulness()` trong `eval.py` |
+| Token overload | Context qua dai -> lost in the middle | Kiem tra do dai `context_block` |
 
 ---
 
-## 6. Diagram (tùy chọn)
-
-> TODO: Vẽ sơ đồ pipeline nếu có thời gian. Có thể dùng Mermaid hoặc drawio.
+## 6. Diagram
 
 ```mermaid
 graph LR
     A[User Query] --> B[Query Embedding]
-    B --> C[ChromaDB Vector Search]
-    C --> D[Top-10 Candidates]
-    D --> E{Rerank?}
-    E -->|Yes| F[Cross-Encoder]
-    E -->|No| G[Top-3 Select]
-    F --> G
-    G --> H[Build Context Block]
-    H --> I[Grounded Prompt]
-    I --> J[LLM]
-    J --> K[Answer + Citation]
+    B --> C[Dense Search ChromaDB]
+    A --> D[Sparse Search BM25]
+    C --> E[Merge Hybrid]
+    D --> E
+    E --> F{Rerank?}
+    F -->|Yes| G[Cross-Encoder Rerank]
+    F -->|No| H[Top-k Select]
+    G --> H
+    H --> I[Build Context Block]
+    I --> J[Grounded Prompt]
+    J --> K[LLM]
+    K --> L[Answer + Citation]
 ```
